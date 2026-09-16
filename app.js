@@ -53,6 +53,7 @@ input.addEventListener('change', () => {
 });
 let selectedImage = null;
 let aspectRatio = 3 / 4;
+let generatedPattern = null;
 
 function showSetup(file) {
   const reader = new FileReader();
@@ -116,18 +117,73 @@ document.querySelector('#backToProjects').addEventListener('click', () => {
 document.querySelector('#generatePattern').addEventListener('click', () => {
   if (!selectedImage) return;
   const { columns, rows } = updateGridMath();
-  const result = document.querySelector('#patternResult');
-  const output = document.querySelector('#patternCanvas');
-  const outputContext = output.getContext('2d');
   const sample = document.createElement('canvas');
-  sample.width = Math.min(columns, 180);
-  sample.height = Math.min(rows, 180);
+  sample.width = columns;
+  sample.height = rows;
   sample.getContext('2d').drawImage(selectedImage, 0, 0, sample.width, sample.height);
-  outputContext.imageSmoothingEnabled = false;
-  outputContext.clearRect(0, 0, output.width, output.height);
-  outputContext.drawImage(sample, 0, 0, output.width, output.height);
+  const pixels = sample.getContext('2d').getImageData(0, 0, columns, rows).data;
+  const limit = Number(document.querySelector('#maxColors').value);
+  const buckets = new Map();
+  for (let index = 0; index < pixels.length; index += 4) {
+    const color = [pixels[index], pixels[index + 1], pixels[index + 2]];
+    const key = color.map(channel => Math.min(255, Math.round(channel / 32) * 32)).join(',');
+    const entry = buckets.get(key) || { color, count: 0 };
+    entry.count += 1;
+    buckets.set(key, entry);
+  }
+  const palette = [...buckets.values()].sort((a, b) => b.count - a.count).slice(0, limit).map(entry => entry.color);
+  const cells = [];
+  const counts = new Array(palette.length).fill(0);
+  for (let index = 0; index < pixels.length; index += 4) {
+    let closest = 0;
+    let distance = Infinity;
+    palette.forEach((color, paletteIndex) => {
+      const candidate = (pixels[index] - color[0]) ** 2 + (pixels[index + 1] - color[1]) ** 2 + (pixels[index + 2] - color[2]) ** 2;
+      if (candidate < distance) { distance = candidate; closest = paletteIndex; }
+    });
+    cells.push(closest);
+    counts[closest] += 1;
+  }
+  generatedPattern = { columns, rows, palette, cells, counts };
+  renderPattern();
+  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${(columns * rows).toLocaleString()} drills</span><span>${palette.length} colors</span>`;
+  document.querySelector('#patternPalette').innerHTML = palette.map((color, index) => `<span title="Color ${index + 1}: ${counts[index].toLocaleString()} drills" style="--swatch:rgb(${color.join(',')})"></span>`).join('');
+  const result = document.querySelector('#patternResult');
   result.hidden = false;
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+function renderPattern() {
+  if (!generatedPattern) return;
+  const { columns, rows, palette, cells } = generatedPattern;
+  const cellSize = Number(document.querySelector('#previewZoom').value);
+  const showGrid = document.querySelector('#showGrid').checked && cellSize >= 4;
+  const output = document.querySelector('#patternCanvas');
+  output.width = columns * cellSize;
+  output.height = rows * cellSize;
+  const context = output.getContext('2d');
+  cells.forEach((paletteIndex, index) => {
+    const color = palette[paletteIndex];
+    const x = (index % columns) * cellSize;
+    const y = Math.floor(index / columns) * cellSize;
+    context.fillStyle = `rgb(${color.join(',')})`;
+    context.fillRect(x, y, cellSize, cellSize);
+    if (showGrid) {
+      context.strokeStyle = 'rgba(35,30,45,.18)';
+      context.lineWidth = 1;
+      context.strokeRect(x + .5, y + .5, cellSize - 1, cellSize - 1);
+    }
+  });
+}
+
+document.querySelector('#previewZoom').addEventListener('input', renderPattern);
+document.querySelector('#showGrid').addEventListener('change', renderPattern);
+document.querySelector('#downloadPreview').addEventListener('click', () => {
+  if (!generatedPattern) return;
+  const link = document.createElement('a');
+  link.download = 'diamond-pattern-preview.png';
+  link.href = document.querySelector('#patternCanvas').toDataURL('image/png');
+  link.click();
 });
 
 document.querySelectorAll('.project-card').forEach(card => card.addEventListener('click', () => {

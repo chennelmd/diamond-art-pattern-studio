@@ -18,5 +18,5 @@ Then open `http://localhost:4173`.
 - Production checklist and manufacturer profile visibility
 - New-project artwork picker for PNG, JPEG, and TIFF files
 - Import and setup workspace with image metadata, aspect-ratio locking, drill profiles, and exact whole-cell grid calculations
-- Pixelated first-pattern preview generated locally from the selected artwork
+- Color-reduced, true-proportion drill-grid preview with zoom, grid inspection, palette counts, and PNG download
 - Fully local static assets and application behavior

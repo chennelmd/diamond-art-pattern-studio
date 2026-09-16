@@ -55,6 +55,7 @@
               <label>Drill profile<select id="drillProfile"><option value="2.5">Round drill · 2.5 mm pitch</option><option value="2.5">Square drill · 2.5 mm pitch</option><option value="2.8">Large round · 2.8 mm pitch</option></select></label>
               <div class="field-row"><label>Width<div class="input-unit"><input id="targetWidth" type="number" min="1" step="0.1" value="12" /><span>in</span></div></label><label>Height<div class="input-unit"><input id="targetHeight" type="number" min="1" step="0.1" value="16" /><span>in</span></div></label></div>
               <label>Cell rounding<select id="roundingMode"><option value="round">Nearest whole cell</option><option value="floor">Round down</option><option value="ceil">Round up</option></select></label>
+              <label>Maximum colors<select id="maxColors"><option value="12">12 colors</option><option value="18">18 colors</option><option value="24" selected>24 colors</option><option value="36">36 colors</option><option value="48">48 colors</option></select></label>
               <label class="check-row"><input id="lockRatio" type="checkbox" checked /><span>Lock artwork aspect ratio</span></label>
               <div class="calculation-card"><div><span>Calculated grid</span><strong id="gridDimensions">122 × 163 cells</strong></div><div><span>Actual print size</span><strong id="actualSize">12.01 × 16.04 in</strong></div><div><span>Size difference</span><strong id="sizeDifference">+0.01 × +0.04 in</strong></div></div>
               <div id="setupWarning" class="setup-warning">ⓘ Dimensions are rounded to the nearest whole drill cell.</div>
@@ -62,8 +63,11 @@
             </aside>
           </div>
           <section id="patternResult" class="pattern-result" hidden>
-            <div><p class="eyebrow">PATTERN PREVIEW</p><h2>Your first pattern is ready</h2><p>The image has been sampled to the calculated drill grid. Continue refining it in the editor.</p></div>
-            <canvas id="patternCanvas" width="520" height="420"></canvas>
+            <div class="result-copy"><p class="eyebrow">PATTERN PREVIEW</p><h2>Your first pattern is ready</h2><p>The preview preserves the grid’s true proportions. Zoom in to inspect individual drill cells and grid lines.</p><div id="patternStats" class="pattern-stats"></div><div id="patternPalette" class="pattern-palette" aria-label="Generated color palette"></div></div>
+            <div class="preview-workspace">
+              <div class="preview-toolbar"><label>Zoom <input id="previewZoom" type="range" min="2" max="10" value="4" /></label><label class="check-row"><input id="showGrid" type="checkbox" checked /> Show grid</label><button id="downloadPreview" class="secondary-btn">Download preview</button></div>
+              <div id="patternViewport" class="pattern-viewport"><canvas id="patternCanvas" width="1" height="1"></canvas></div>
+            </div>
           </section>
         </section>
 
