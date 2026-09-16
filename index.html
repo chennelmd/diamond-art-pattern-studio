@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Diamond Art Pattern Studio</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#" aria-label="Diamond Art Pattern Studio home">
+          <span class="brand-gem">◆</span>
+          <span><strong>Diamond Art</strong><small>Pattern Studio</small></span>
+        </a>
+        <button class="new-project"><span>＋</span> New project</button>
+        <nav aria-label="Primary navigation">
+          <p class="nav-label">Workspace</p>
+          <a class="nav-item active" href="#"><span>▦</span> Projects <b>4</b></a>
+          <a class="nav-item" href="#"><span>◇</span> Palettes</a>
+          <a class="nav-item" href="#"><span>▤</span> Export profiles</a>
+          <p class="nav-label second">Resources</p>
+          <a class="nav-item" href="#"><span>◫</span> Print calibration</a>
+          <a class="nav-item" href="#"><span>?</span> Operator guide</a>
+        </nav>
+        <div class="storage-card">
+          <div class="storage-icon">▣</div>
+          <div><strong>Stored locally</strong><p>Your artwork never leaves this computer.</p></div>
+        </div>
+        <div class="user-row">
+          <div class="avatar">CH</div><div><strong>Chennel</strong><small>Studio operator</small></div><span>•••</span>
+        </div>
+      </aside>
+
+      <main>
+        <header>
+          <div><p class="eyebrow">WORKSPACE</p><h1>Your pattern studio</h1><p class="subtitle">Create, refine, and prepare artwork for production.</p></div>
+          <div class="header-actions"><button class="icon-btn" aria-label="Search">⌕</button><button class="icon-btn" aria-label="Notifications">♢<i></i></button></div>
+        </header>
+
+        <section class="hero-card">
+          <div class="hero-copy"><span class="pill">START A NEW DESIGN</span><h2>Turn artwork into<br /><em>something brilliant.</em></h2><p>Import your image, choose the finished size, and create a clean, production-ready drill pattern.</p><button id="startProject" class="primary-btn">Create new pattern <span>→</span></button></div>
+          <div class="hero-art" aria-hidden="true"><canvas id="gemCanvas" width="520" height="275"></canvas><div class="spark s1">✦</div><div class="spark s2">✦</div><div class="spark s3">·</div></div>
+        </section>
+
+        <section class="stats-grid">
+          <article><span class="stat-icon lavender">▦</span><div><small>ACTIVE PROJECTS</small><strong>4</strong><p>2 ready for export</p></div></article>
+          <article><span class="stat-icon mint">✓</span><div><small>PATTERNS COMPLETED</small><strong>12</strong><p>Across 8 projects</p></div></article>
+          <article><span class="stat-icon peach">◆</span><div><small>DRILL COLORS</small><strong>86</strong><p>Supplier palette</p></div></article>
+          <article><span class="stat-icon blue">◎</span><div><small>PRINT PROFILE</small><strong class="profile-name">UPrinting</strong><p><span class="dot"></span> Draft profile</p></div></article>
+        </section>
+
+        <section class="projects-section">
+          <div class="section-head"><div><h2>Recent projects</h2><p>Continue where you left off</p></div><button class="text-btn">View all projects <span>→</span></button></div>
+          <div class="project-grid" id="projectGrid">
+            <article class="project-card" tabindex="0">
+              <div class="thumb santa"><div class="mock-pattern portrait"></div><span class="status editing"><i></i> Editing</span><button aria-label="Project menu">•••</button></div>
+              <div class="project-info"><h3>Holiday Portrait</h3><p>12 × 16 in&nbsp; <b>•</b>&nbsp; 48 colors</p><div><span>Modified 2 hours ago</span><strong>80 × 107</strong></div></div>
+            </article>
+            <article class="project-card" tabindex="0">
+              <div class="thumb ornament"><div class="mock-pattern bauble">✣</div><span class="status ready"><i></i> Ready to export</span><button aria-label="Project menu">•••</button></div>
+              <div class="project-info"><h3>Winter Ornament</h3><p>10 × 10 in&nbsp; <b>•</b>&nbsp; 24 colors</p><div><span>Modified yesterday</span><strong>67 × 67</strong></div></div>
+            </article>
+            <article class="project-card" tabindex="0">
+              <div class="thumb flowers"><div class="mock-pattern floral">✿</div><span class="status review"><i></i> Needs review</span><button aria-label="Project menu">•••</button></div>
+              <div class="project-info"><h3>Garden Study</h3><p>16 × 20 in&nbsp; <b>•</b>&nbsp; 62 colors</p><div><span>Modified Sep 12</span><strong>107 × 133</strong></div></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="production-row">
+          <div><span class="section-icon">✓</span><div><h3>Production checklist</h3><p>Before sending your next pattern to print</p></div></div>
+          <ul><li class="done"><span>✓</span><div><strong>Calibrate your drill pitch</strong><small>Last checked Sep 10</small></div></li><li><span>2</span><div><strong>Confirm manufacturer profile</strong><small>4 settings need review</small></div></li><li><span>3</span><div><strong>Run a scale test print</strong><small>Print the 100 mm calibration bar</small></div></li></ul>
+          <button class="secondary-btn">Open checklist</button>
+        </section>
+        <footer><span><b>◆</b> Diamond Art Pattern Studio</span><span>Local workspace · Autosave enabled <i></i></span></footer>
+      </main>
+    </div>
+
+    <dialog id="projectDialog">
+      <form method="dialog">
+        <div class="dialog-head"><span class="brand-gem">◆</span><button value="cancel" aria-label="Close">×</button></div>
+        <p class="eyebrow">NEW PROJECT</p><h2>Let’s create your pattern</h2><p>Choose an artwork file to begin. Your original will be preserved.</p>
+        <label class="upload-zone" for="artwork"><span>⇧</span><strong>Drop artwork here or browse</strong><small>PNG, JPG or TIFF · up to 600 MB</small></label>
+        <input id="artwork" type="file" accept="image/png,image/jpeg,image/tiff" hidden />
+        <div id="fileName" class="file-name"></div>
+        <button id="continueBtn" class="primary-btn" value="default" disabled>Continue to setup <span>→</span></button>
+      </form>
+    </dialog>
+    <script src="app.js"></script>
+  </body>
+</html>
