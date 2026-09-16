@@ -17,6 +17,6 @@ Then open `http://localhost:4173`.
 - Responsive project dashboard with recent-project status and production metrics
 - Production checklist and manufacturer profile visibility
 - New-project artwork picker for PNG, JPEG, and TIFF files
-- Import and setup workspace with image metadata, aspect-ratio locking, drill profiles, and exact whole-cell grid calculations
+- Import and setup workspace with image metadata, aspect-ratio locking, drill profiles, multi-vendor selection, and exact whole-cell grid calculations
 - Color-reduced, true-proportion drill-grid preview with zoom, grid inspection, palette counts, and PNG download
 - Fully local static assets and application behavior

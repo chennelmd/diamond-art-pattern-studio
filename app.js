@@ -117,13 +117,17 @@ document.querySelector('#backToProjects').addEventListener('click', () => {
 });
 document.querySelector('#generatePattern').addEventListener('click', () => {
   if (!selectedImage) return;
+  const vendors = [...document.querySelectorAll('.vendor-choice:checked')].map(choice => choice.value);
+  const vendorError = document.querySelector('#vendorError');
+  vendorError.hidden = vendors.length > 0;
+  if (!vendors.length) return;
   const { columns, rows } = updateGridMath();
   const sample = document.createElement('canvas');
   sample.width = columns;
   sample.height = rows;
   sample.getContext('2d').drawImage(selectedImage, 0, 0, sample.width, sample.height);
   const pixels = sample.getContext('2d').getImageData(0, 0, columns, rows).data;
-  const limit = Number(document.querySelector('#maxColors').value);
+  const maximumColors = document.querySelector('#maxColors').value;
   const buckets = new Map();
   for (let index = 0; index < pixels.length; index += 4) {
     const color = [pixels[index], pixels[index + 1], pixels[index + 2]];
@@ -132,7 +136,9 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
     entry.count += 1;
     buckets.set(key, entry);
   }
-  const palette = [...buckets.values()].sort((a, b) => b.count - a.count).slice(0, limit).map(entry => entry.color);
+  const availableColors = [...buckets.values()].sort((a, b) => b.count - a.count);
+  const limit = maximumColors === 'all' ? availableColors.length : Number(maximumColors);
+  const palette = availableColors.slice(0, limit).map(entry => entry.color);
   const cells = [];
   const counts = new Array(palette.length).fill(0);
   for (let index = 0; index < pixels.length; index += 4) {
@@ -145,14 +151,21 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
     cells.push(closest);
     counts[closest] += 1;
   }
-  generatedPattern = { columns, rows, palette, cells, counts };
+  generatedPattern = { columns, rows, palette, cells, counts, vendors };
   renderPattern();
   document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${(columns * rows).toLocaleString()} drills</span><span>${palette.length} colors</span>`;
+  document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
   document.querySelector('#patternPalette').innerHTML = palette.map((color, index) => `<span title="Color ${index + 1}: ${counts[index].toLocaleString()} drills" style="--swatch:rgb(${color.join(',')})"></span>`).join('');
   const result = document.querySelector('#patternResult');
   result.hidden = false;
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
+
+document.querySelectorAll('.vendor-choice').forEach(choice => choice.addEventListener('change', () => {
+  const hasVendor = document.querySelectorAll('.vendor-choice:checked').length > 0;
+  document.querySelector('#vendorError').hidden = hasVendor;
+  if (generatedPattern) document.querySelector('#patternResult').hidden = true;
+}));
 
 function renderPattern() {
   if (!generatedPattern) return;
