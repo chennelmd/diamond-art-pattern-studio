@@ -87,7 +87,8 @@ function updateGridMath(changedField) {
   }
   const width = Math.max(1, Number(widthInput.value) || 1);
   const height = Math.max(1, Number(heightInput.value) || 1);
-  const pitch = Number(document.querySelector('#drillProfile').value);
+  const [, pitchValue] = document.querySelector('#drillProfile').value.split(':');
+  const pitch = Number(pitchValue);
   const rounder = Math[document.querySelector('#roundingMode').value];
   const columns = Math.max(1, rounder(width * 25.4 / pitch));
   const rows = Math.max(1, rounder(height * 25.4 / pitch));
@@ -109,6 +110,14 @@ continueBtn.addEventListener('click', (event) => {
 
 document.querySelectorAll('#targetWidth, #targetHeight').forEach(field => field.addEventListener('input', () => updateGridMath(field)));
 document.querySelectorAll('#drillProfile, #roundingMode, #lockRatio').forEach(field => field.addEventListener('change', () => updateGridMath()));
+document.querySelector('#roundingMode').addEventListener('change', event => {
+  const explanations = {
+    round: 'Uses the closest whole number of drills, so the finished size changes as little as possible.',
+    floor: 'Uses fewer cells when necessary, so the finished design will never exceed the requested dimensions.',
+    ceil: 'Uses extra cells when necessary, so the finished design will never be smaller than the requested dimensions.',
+  };
+  document.querySelector('#roundingHelp').textContent = explanations[event.target.value];
+});
 document.querySelector('#replaceArtwork').addEventListener('click', () => input.click());
 document.querySelector('#backToProjects').addEventListener('click', () => {
   document.querySelector('#setupView').hidden = true;
@@ -122,6 +131,7 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   vendorError.hidden = vendors.length > 0;
   if (!vendors.length) return;
   const { columns, rows } = updateGridMath();
+  const [drillShape] = document.querySelector('#drillProfile').value.split(':');
   const sample = document.createElement('canvas');
   sample.width = columns;
   sample.height = rows;
@@ -151,9 +161,9 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
     cells.push(closest);
     counts[closest] += 1;
   }
-  generatedPattern = { columns, rows, palette, cells, counts, vendors };
+  generatedPattern = { columns, rows, palette, cells, counts, vendors, drillShape };
   renderPattern();
-  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${(columns * rows).toLocaleString()} drills</span><span>${palette.length} colors</span>`;
+  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${(columns * rows).toLocaleString()} drills</span><span>${palette.length} colors</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
   document.querySelector('#patternPalette').innerHTML = palette.map((color, index) => `<span title="Color ${index + 1}: ${counts[index].toLocaleString()} drills" style="--swatch:rgb(${color.join(',')})"></span>`).join('');
   const result = document.querySelector('#patternResult');
@@ -169,20 +179,33 @@ document.querySelectorAll('.vendor-choice').forEach(choice => choice.addEventLis
 
 function renderPattern() {
   if (!generatedPattern) return;
-  const { columns, rows, palette, cells } = generatedPattern;
+  const { columns, rows, palette, cells, drillShape } = generatedPattern;
   const cellSize = Number(document.querySelector('#previewZoom').value);
   const showGrid = document.querySelector('#showGrid').checked && cellSize >= 4;
   const output = document.querySelector('#patternCanvas');
   output.width = columns * cellSize;
   output.height = rows * cellSize;
   const context = output.getContext('2d');
+  context.fillStyle = drillShape === 'round' ? '#eeeaf0' : '#ffffff';
+  context.fillRect(0, 0, output.width, output.height);
   cells.forEach((paletteIndex, index) => {
     const color = palette[paletteIndex];
     const x = (index % columns) * cellSize;
     const y = Math.floor(index / columns) * cellSize;
     context.fillStyle = `rgb(${color.join(',')})`;
-    context.fillRect(x, y, cellSize, cellSize);
-    if (showGrid) {
+    if (drillShape === 'round') {
+      context.beginPath();
+      context.arc(x + cellSize / 2, y + cellSize / 2, Math.max(.75, cellSize * .44), 0, Math.PI * 2);
+      context.fill();
+      if (showGrid) {
+        context.strokeStyle = 'rgba(35,30,45,.22)';
+        context.lineWidth = 1;
+        context.stroke();
+      }
+    } else {
+      context.fillRect(x, y, cellSize, cellSize);
+    }
+    if (showGrid && drillShape === 'square') {
       context.strokeStyle = 'rgba(35,30,45,.18)';
       context.lineWidth = 1;
       context.strokeRect(x + .5, y + .5, cellSize - 1, cellSize - 1);
