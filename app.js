@@ -61,6 +61,7 @@ function showSetup(file) {
     selectedImage = new Image();
     selectedImage.onload = () => {
       aspectRatio = selectedImage.width / selectedImage.height;
+      document.querySelector('#sourceFrame').style.aspectRatio = `${selectedImage.width} / ${selectedImage.height}`;
       document.querySelector('#sourcePreview').src = reader.result;
       document.querySelector('#sourceName').textContent = file.name;
       document.querySelector('#sourceDimensions').textContent = `${selectedImage.width} × ${selectedImage.height} px`;
