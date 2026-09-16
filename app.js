@@ -49,9 +49,85 @@ input.addEventListener('change', () => {
   const file = input.files[0];
   document.querySelector('#fileName').textContent = file ? `✓ ${file.name} selected` : '';
   continueBtn.disabled = !file;
+  if (file && !document.querySelector('#setupView').hidden) showSetup(file);
 });
+let selectedImage = null;
+let aspectRatio = 3 / 4;
+
+function showSetup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    selectedImage = new Image();
+    selectedImage.onload = () => {
+      aspectRatio = selectedImage.width / selectedImage.height;
+      document.querySelector('#sourcePreview').src = reader.result;
+      document.querySelector('#sourceName').textContent = file.name;
+      document.querySelector('#sourceDimensions').textContent = `${selectedImage.width} × ${selectedImage.height} px`;
+      document.querySelector('#sourceFormat').textContent = (file.type.split('/')[1] || 'image').toUpperCase();
+      document.querySelector('#sourceMeta').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB · Original preserved locally`;
+      document.querySelector('#targetHeight').value = (12 / aspectRatio).toFixed(1);
+      updateGridMath();
+    };
+    selectedImage.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+  document.querySelector('#dashboardView').hidden = true;
+  document.querySelector('#setupView').hidden = false;
+  document.querySelector('header').hidden = true;
+}
+
+function updateGridMath(changedField) {
+  const widthInput = document.querySelector('#targetWidth');
+  const heightInput = document.querySelector('#targetHeight');
+  if (document.querySelector('#lockRatio').checked && selectedImage) {
+    if (changedField === widthInput) heightInput.value = (Number(widthInput.value) / aspectRatio).toFixed(1);
+    if (changedField === heightInput) widthInput.value = (Number(heightInput.value) * aspectRatio).toFixed(1);
+  }
+  const width = Math.max(1, Number(widthInput.value) || 1);
+  const height = Math.max(1, Number(heightInput.value) || 1);
+  const pitch = Number(document.querySelector('#drillProfile').value);
+  const rounder = Math[document.querySelector('#roundingMode').value];
+  const columns = Math.max(1, rounder(width * 25.4 / pitch));
+  const rows = Math.max(1, rounder(height * 25.4 / pitch));
+  const actualWidth = columns * pitch / 25.4;
+  const actualHeight = rows * pitch / 25.4;
+  const signed = value => `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
+  document.querySelector('#gridDimensions').textContent = `${columns} × ${rows} cells`;
+  document.querySelector('#actualSize').textContent = `${actualWidth.toFixed(2)} × ${actualHeight.toFixed(2)} in`;
+  document.querySelector('#sizeDifference').textContent = `${signed(actualWidth - width)} × ${signed(actualHeight - height)} in`;
+  return { columns, rows };
+}
+
 continueBtn.addEventListener('click', (event) => {
-  if (!input.files.length) event.preventDefault();
+  event.preventDefault();
+  if (!input.files.length) return;
+  dialog.close();
+  showSetup(input.files[0]);
+});
+
+document.querySelectorAll('#targetWidth, #targetHeight').forEach(field => field.addEventListener('input', () => updateGridMath(field)));
+document.querySelectorAll('#drillProfile, #roundingMode, #lockRatio').forEach(field => field.addEventListener('change', () => updateGridMath()));
+document.querySelector('#replaceArtwork').addEventListener('click', () => input.click());
+document.querySelector('#backToProjects').addEventListener('click', () => {
+  document.querySelector('#setupView').hidden = true;
+  document.querySelector('#dashboardView').hidden = false;
+  document.querySelector('header').hidden = false;
+});
+document.querySelector('#generatePattern').addEventListener('click', () => {
+  if (!selectedImage) return;
+  const { columns, rows } = updateGridMath();
+  const result = document.querySelector('#patternResult');
+  const output = document.querySelector('#patternCanvas');
+  const outputContext = output.getContext('2d');
+  const sample = document.createElement('canvas');
+  sample.width = Math.min(columns, 180);
+  sample.height = Math.min(rows, 180);
+  sample.getContext('2d').drawImage(selectedImage, 0, 0, sample.width, sample.height);
+  outputContext.imageSmoothingEnabled = false;
+  outputContext.clearRect(0, 0, output.width, output.height);
+  outputContext.drawImage(sample, 0, 0, output.width, output.height);
+  result.hidden = false;
+  result.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
 document.querySelectorAll('.project-card').forEach(card => card.addEventListener('click', () => {

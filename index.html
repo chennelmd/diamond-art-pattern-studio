@@ -38,6 +38,37 @@
           <div class="header-actions"><button class="icon-btn" aria-label="Search">⌕</button><button class="icon-btn" aria-label="Notifications">♢<i></i></button></div>
         </header>
 
+        <section id="setupView" class="setup-view" hidden>
+          <button id="backToProjects" class="back-btn">← Back to projects</button>
+          <div class="setup-heading">
+            <div><p class="eyebrow">NEW PATTERN · STEP 1 OF 3</p><h1>Import &amp; setup</h1><p class="subtitle">Confirm your artwork and choose the finished drill dimensions.</p></div>
+            <div class="stepper"><span class="current">1</span><i></i><span>2</span><i></i><span>3</span></div>
+          </div>
+          <div class="setup-layout">
+            <article class="artwork-panel">
+              <div class="panel-title"><div><h2>Source artwork</h2><p id="sourceMeta">Preparing image…</p></div><button id="replaceArtwork" class="text-btn">Replace</button></div>
+              <div class="image-stage"><img id="sourcePreview" alt="Selected source artwork" /></div>
+              <div class="image-facts"><span><small>FILE</small><strong id="sourceName">—</strong></span><span><small>DIMENSIONS</small><strong id="sourceDimensions">—</strong></span><span><small>FORMAT</small><strong id="sourceFormat">—</strong></span></div>
+            </article>
+            <aside class="settings-panel">
+              <div class="panel-title"><div><h2>Pattern dimensions</h2><p>Physical dimensions resolve to whole drill cells.</p></div></div>
+              <label>Drill profile<select id="drillProfile"><option value="2.5">Round drill · 2.5 mm pitch</option><option value="2.5">Square drill · 2.5 mm pitch</option><option value="2.8">Large round · 2.8 mm pitch</option></select></label>
+              <div class="field-row"><label>Width<div class="input-unit"><input id="targetWidth" type="number" min="1" step="0.1" value="12" /><span>in</span></div></label><label>Height<div class="input-unit"><input id="targetHeight" type="number" min="1" step="0.1" value="16" /><span>in</span></div></label></div>
+              <label>Cell rounding<select id="roundingMode"><option value="round">Nearest whole cell</option><option value="floor">Round down</option><option value="ceil">Round up</option></select></label>
+              <label class="check-row"><input id="lockRatio" type="checkbox" checked /><span>Lock artwork aspect ratio</span></label>
+              <div class="calculation-card"><div><span>Calculated grid</span><strong id="gridDimensions">122 × 163 cells</strong></div><div><span>Actual print size</span><strong id="actualSize">12.01 × 16.04 in</strong></div><div><span>Size difference</span><strong id="sizeDifference">+0.01 × +0.04 in</strong></div></div>
+              <div id="setupWarning" class="setup-warning">ⓘ Dimensions are rounded to the nearest whole drill cell.</div>
+              <button id="generatePattern" class="primary-btn setup-continue">Generate pattern <span>→</span></button>
+            </aside>
+          </div>
+          <section id="patternResult" class="pattern-result" hidden>
+            <div><p class="eyebrow">PATTERN PREVIEW</p><h2>Your first pattern is ready</h2><p>The image has been sampled to the calculated drill grid. Continue refining it in the editor.</p></div>
+            <canvas id="patternCanvas" width="520" height="420"></canvas>
+          </section>
+        </section>
+
+        <div id="dashboardView">
+
         <section class="hero-card">
           <div class="hero-copy"><span class="pill">START A NEW DESIGN</span><h2>Turn artwork into<br /><em>something brilliant.</em></h2><p>Import your image, choose the finished size, and create a clean, production-ready drill pattern.</p><button id="startProject" class="primary-btn">Create new pattern <span>→</span></button></div>
           <div class="hero-art" aria-hidden="true"><canvas id="gemCanvas" width="520" height="275"></canvas><div class="spark s1">✦</div><div class="spark s2">✦</div><div class="spark s3">·</div></div>
@@ -74,6 +105,7 @@
           <button class="secondary-btn">Open checklist</button>
         </section>
         <footer><span><b>◆</b> Diamond Art Pattern Studio</span><span>Local workspace · Autosave enabled <i></i></span></footer>
+        </div>
       </main>
     </div>
 
