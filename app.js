@@ -72,6 +72,7 @@ function showSetup(file) {
       document.querySelector('#sourceMeta').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB · Original preserved locally`;
       document.querySelector('#targetHeight').value = (12 / aspectRatio).toFixed(1);
       imageAnalysis = analyzeImage(selectedImage);
+      document.querySelector('#transparencyOptions').hidden = !imageAnalysis.hasTransparency;
       if (imageAnalysis.hasTransparency) document.querySelector('#sourceMeta').textContent += ' · Transparency detected';
       updateRecommendation();
       updateGridMath();
@@ -214,12 +215,17 @@ function cleanPatternCells(sourceCells, columns, rows, strength) {
     for (let y = 1; y < rows - 1; y += 1) {
       for (let x = 1; x < columns - 1; x += 1) {
         const index = y * columns + x;
+        if (cells[index] === -1) continue;
         const neighbors = [];
         for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
           for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
-            if (offsetX || offsetY) neighbors.push(cells[(y + offsetY) * columns + x + offsetX]);
+            if (offsetX || offsetY) {
+              const neighbor = cells[(y + offsetY) * columns + x + offsetX];
+              if (neighbor !== -1) neighbors.push(neighbor);
+            }
           }
         }
+        if (!neighbors.length) continue;
         const frequencies = new Map();
         neighbors.forEach(color => frequencies.set(color, (frequencies.get(color) || 0) + 1));
         const [majorityColor, majorityCount] = [...frequencies.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -265,6 +271,14 @@ document.querySelector('#resetCrop').addEventListener('click', () => {
   document.querySelector('#cropY').value = 50;
   updateCropPreview();
 });
+document.querySelectorAll('input[name="transparencyMode"]').forEach(control => control.addEventListener('change', event => {
+  document.querySelector('#opacityControl').hidden = event.target.value === 'fill';
+  if (generatedPattern) document.querySelector('#patternResult').hidden = true;
+}));
+document.querySelector('#opacityThreshold').addEventListener('input', event => {
+  document.querySelector('#opacityValue').textContent = `${event.target.value}%`;
+  if (generatedPattern) document.querySelector('#patternResult').hidden = true;
+});
 document.querySelector('#roundingMode').addEventListener('change', event => {
   const explanations = {
     round: 'Uses the closest whole number of drills, so the finished size changes as little as possible.',
@@ -291,14 +305,20 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   sample.width = columns;
   sample.height = rows;
   const sampleContext = sample.getContext('2d');
-  sampleContext.fillStyle = document.querySelector('#backgroundColor').value;
-  sampleContext.fillRect(0, 0, sample.width, sample.height);
+  const transparencyMode = document.querySelector('input[name="transparencyMode"]:checked').value;
+  if (transparencyMode === 'fill') {
+    sampleContext.fillStyle = document.querySelector('#backgroundColor').value;
+    sampleContext.fillRect(0, 0, sample.width, sample.height);
+  }
   const crop = cropRegion();
   sampleContext.drawImage(selectedImage, crop.x, crop.y, crop.width, crop.height, 0, 0, sample.width, sample.height);
   const pixels = sample.getContext('2d').getImageData(0, 0, columns, rows).data;
+  const opacityThreshold = Number(document.querySelector('#opacityThreshold').value) / 100 * 255;
+  const isOccupied = index => transparencyMode === 'fill' || pixels[index + 3] >= opacityThreshold;
   const maximumColors = document.querySelector('#maxColors').value;
   const buckets = new Map();
   for (let index = 0; index < pixels.length; index += 4) {
+    if (!isOccupied(index)) continue;
     const color = [pixels[index], pixels[index + 1], pixels[index + 2]];
     const key = color.map(channel => Math.min(255, Math.round(channel / 32) * 32)).join(',');
     const entry = buckets.get(key) || { color, count: 0 };
@@ -310,6 +330,7 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const palette = availableColors.slice(0, limit).map(entry => entry.color);
   const mappedCells = [];
   for (let index = 0; index < pixels.length; index += 4) {
+    if (!isOccupied(index)) { mappedCells.push(-1); continue; }
     let closest = 0;
     let distance = Infinity;
     palette.forEach((color, paletteIndex) => {
@@ -322,10 +343,11 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const cleanup = cleanPatternCells(mappedCells, columns, rows, cleanupStrength);
   const cells = cleanup.cells;
   const counts = new Array(palette.length).fill(0);
-  cells.forEach(color => { counts[color] += 1; });
-  generatedPattern = { columns, rows, palette, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed };
+  cells.forEach(color => { if (color !== -1) counts[color] += 1; });
+  const occupiedCells = cells.filter(color => color !== -1).length;
+  generatedPattern = { columns, rows, palette, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, transparencyMode, occupiedCells };
   renderPattern();
-  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${(columns * rows).toLocaleString()} drills</span><span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
+  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
   document.querySelector('#patternPalette').innerHTML = palette.map((color, index) => `<span title="Color ${index + 1}: ${counts[index].toLocaleString()} drills" style="--swatch:rgb(${color.join(',')})"></span>`).join('');
   const result = document.querySelector('#patternResult');
@@ -344,16 +366,20 @@ document.querySelectorAll('#maxColors, #cleanupStrength').forEach(control => con
 
 function renderPattern() {
   if (!generatedPattern) return;
-  const { columns, rows, palette, cells, drillShape } = generatedPattern;
+  const { columns, rows, palette, cells, drillShape, transparencyMode } = generatedPattern;
   const cellSize = Number(document.querySelector('#previewZoom').value);
   const showGrid = document.querySelector('#showGrid').checked && cellSize >= 4;
   const output = document.querySelector('#patternCanvas');
   output.width = columns * cellSize;
   output.height = rows * cellSize;
   const context = output.getContext('2d');
-  context.fillStyle = drillShape === 'round' ? '#eeeaf0' : '#ffffff';
-  context.fillRect(0, 0, output.width, output.height);
+  context.clearRect(0, 0, output.width, output.height);
+  if (transparencyMode === 'fill') {
+    context.fillStyle = drillShape === 'round' ? '#eeeaf0' : '#ffffff';
+    context.fillRect(0, 0, output.width, output.height);
+  }
   cells.forEach((paletteIndex, index) => {
+    if (paletteIndex === -1) return;
     const color = palette[paletteIndex];
     const x = (index % columns) * cellSize;
     const y = Math.floor(index / columns) * cellSize;

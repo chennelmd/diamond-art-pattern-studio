@@ -23,4 +23,5 @@ Then open `http://localhost:4173`.
 - Artwork-based minimum-size recommendations using measured edge detail, color variety, aspect ratio, resolution, and drill pitch
 - Non-destructive crop positioning and configurable transparent-PNG background flattening
 - Conversion-stage confetti cleanup that is completed before manual pattern editing
+- Transparent-region modes for full-drill fill, empty partial-drill areas, or later selective editing
 - Fully local static assets and application behavior
