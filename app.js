@@ -65,12 +65,14 @@ function showSetup(file) {
       aspectRatio = selectedImage.width / selectedImage.height;
       document.querySelector('#sourceFrame').style.aspectRatio = `${selectedImage.width} / ${selectedImage.height}`;
       document.querySelector('#sourcePreview').src = reader.result;
+      updateCropPreview();
       document.querySelector('#sourceName').textContent = file.name;
       document.querySelector('#sourceDimensions').textContent = `${selectedImage.width} × ${selectedImage.height} px`;
       document.querySelector('#sourceFormat').textContent = (file.type.split('/')[1] || 'image').toUpperCase();
       document.querySelector('#sourceMeta').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB · Original preserved locally`;
       document.querySelector('#targetHeight').value = (12 / aspectRatio).toFixed(1);
       imageAnalysis = analyzeImage(selectedImage);
+      if (imageAnalysis.hasTransparency) document.querySelector('#sourceMeta').textContent += ' · Transparency detected';
       updateRecommendation();
       updateGridMath();
     };
@@ -89,8 +91,20 @@ function analyzeImage(image) {
   analysisCanvas.width = Math.max(2, Math.round(image.width * scale));
   analysisCanvas.height = Math.max(2, Math.round(image.height * scale));
   const context = analysisCanvas.getContext('2d', { willReadFrequently: true });
+  context.fillStyle = document.querySelector('#backgroundColor').value;
+  context.fillRect(0, 0, analysisCanvas.width, analysisCanvas.height);
   context.drawImage(image, 0, 0, analysisCanvas.width, analysisCanvas.height);
   const data = context.getImageData(0, 0, analysisCanvas.width, analysisCanvas.height).data;
+  const transparencyCanvas = document.createElement('canvas');
+  transparencyCanvas.width = analysisCanvas.width;
+  transparencyCanvas.height = analysisCanvas.height;
+  const transparencyContext = transparencyCanvas.getContext('2d', { willReadFrequently: true });
+  transparencyContext.drawImage(image, 0, 0, transparencyCanvas.width, transparencyCanvas.height);
+  const alphaData = transparencyContext.getImageData(0, 0, transparencyCanvas.width, transparencyCanvas.height).data;
+  let hasTransparency = false;
+  for (let index = 3; index < alphaData.length; index += 4) {
+    if (alphaData[index] < 250) { hasTransparency = true; break; }
+  }
   const colors = new Set();
   let edgeTotal = 0;
   let edgeSamples = 0;
@@ -114,7 +128,31 @@ function analyzeImage(image) {
   const sourceShortSide = Math.min(image.width, image.height);
   const shortestCells = Math.max(40, Math.min(detailCells, sourceShortSide));
   const resolutionLimited = sourceShortSide < detailCells;
-  return { level, shortestCells, colorGroups: colors.size, resolutionLimited, sourceWidth: image.width, sourceHeight: image.height };
+  return { level, shortestCells, colorGroups: colors.size, resolutionLimited, hasTransparency, sourceWidth: image.width, sourceHeight: image.height };
+}
+
+function cropRegion() {
+  const zoom = Number(document.querySelector('#cropZoom').value) / 100;
+  const width = selectedImage.width / zoom;
+  const height = selectedImage.height / zoom;
+  const x = (selectedImage.width - width) * Number(document.querySelector('#cropX').value) / 100;
+  const y = (selectedImage.height - height) * Number(document.querySelector('#cropY').value) / 100;
+  return { x, y, width, height };
+}
+
+function updateCropPreview() {
+  if (!selectedImage) return;
+  const zoom = Number(document.querySelector('#cropZoom').value);
+  const x = Number(document.querySelector('#cropX').value);
+  const y = Number(document.querySelector('#cropY').value);
+  const color = document.querySelector('#backgroundColor').value;
+  const preview = document.querySelector('#sourcePreview');
+  preview.style.transform = `scale(${zoom / 100})`;
+  preview.style.transformOrigin = `${x}% ${y}%`;
+  document.querySelector('#sourceFrame').style.background = color;
+  document.querySelector('#cropZoomValue').textContent = `${zoom}%`;
+  document.querySelector('#backgroundValue').textContent = color.toUpperCase();
+  document.querySelector('#patternResult').hidden = true;
 }
 
 function updateRecommendation() {
@@ -178,6 +216,20 @@ document.querySelector('#useRecommendedSize').addEventListener('click', () => {
   document.querySelector('#targetHeight').value = recommendedDimensions.height.toFixed(1);
   updateGridMath();
 });
+document.querySelectorAll('#cropZoom, #cropX, #cropY').forEach(control => control.addEventListener('input', updateCropPreview));
+document.querySelector('#backgroundColor').addEventListener('input', () => {
+  updateCropPreview();
+  if (selectedImage) {
+    imageAnalysis = analyzeImage(selectedImage);
+    updateRecommendation();
+  }
+});
+document.querySelector('#resetCrop').addEventListener('click', () => {
+  document.querySelector('#cropZoom').value = 100;
+  document.querySelector('#cropX').value = 50;
+  document.querySelector('#cropY').value = 50;
+  updateCropPreview();
+});
 document.querySelector('#roundingMode').addEventListener('change', event => {
   const explanations = {
     round: 'Uses the closest whole number of drills, so the finished size changes as little as possible.',
@@ -203,7 +255,11 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const sample = document.createElement('canvas');
   sample.width = columns;
   sample.height = rows;
-  sample.getContext('2d').drawImage(selectedImage, 0, 0, sample.width, sample.height);
+  const sampleContext = sample.getContext('2d');
+  sampleContext.fillStyle = document.querySelector('#backgroundColor').value;
+  sampleContext.fillRect(0, 0, sample.width, sample.height);
+  const crop = cropRegion();
+  sampleContext.drawImage(selectedImage, crop.x, crop.y, crop.width, crop.height, 0, 0, sample.width, sample.height);
   const pixels = sample.getContext('2d').getImageData(0, 0, columns, rows).data;
   const maximumColors = document.querySelector('#maxColors').value;
   const buckets = new Map();

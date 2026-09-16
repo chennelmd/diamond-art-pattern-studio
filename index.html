@@ -48,6 +48,7 @@
             <article class="artwork-panel">
               <div class="panel-title"><div><h2>Source artwork</h2><p id="sourceMeta">Preparing image…</p></div><button id="replaceArtwork" class="text-btn">Replace</button></div>
               <div id="sourceFrame" class="image-stage"><img id="sourcePreview" alt="Selected source artwork" /></div>
+              <div class="crop-controls"><label>Crop zoom <input id="cropZoom" type="range" min="100" max="300" value="100" /><output id="cropZoomValue">100%</output></label><label>Horizontal focus <input id="cropX" type="range" min="0" max="100" value="50" /></label><label>Vertical focus <input id="cropY" type="range" min="0" max="100" value="50" /></label><div class="background-control"><label for="backgroundColor">Transparent background</label><input id="backgroundColor" type="color" value="#ffffff" /><span id="backgroundValue">#FFFFFF</span><button id="resetCrop" type="button">Reset crop</button></div></div>
               <div class="image-facts"><span><small>FILE</small><strong id="sourceName">—</strong></span><span><small>DIMENSIONS</small><strong id="sourceDimensions">—</strong></span><span><small>FORMAT</small><strong id="sourceFormat">—</strong></span></div>
             </article>
             <aside class="settings-panel">
