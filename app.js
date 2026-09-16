@@ -54,6 +54,8 @@ input.addEventListener('change', () => {
 let selectedImage = null;
 let aspectRatio = 3 / 4;
 let generatedPattern = null;
+let imageAnalysis = null;
+let recommendedDimensions = null;
 
 function showSetup(file) {
   const reader = new FileReader();
@@ -68,6 +70,8 @@ function showSetup(file) {
       document.querySelector('#sourceFormat').textContent = (file.type.split('/')[1] || 'image').toUpperCase();
       document.querySelector('#sourceMeta').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB · Original preserved locally`;
       document.querySelector('#targetHeight').value = (12 / aspectRatio).toFixed(1);
+      imageAnalysis = analyzeImage(selectedImage);
+      updateRecommendation();
       updateGridMath();
     };
     selectedImage.src = reader.result;
@@ -76,6 +80,63 @@ function showSetup(file) {
   document.querySelector('#dashboardView').hidden = true;
   document.querySelector('#setupView').hidden = false;
   document.querySelector('header').hidden = true;
+}
+
+function analyzeImage(image) {
+  const analysisCanvas = document.createElement('canvas');
+  const longestSide = 160;
+  const scale = Math.min(1, longestSide / Math.max(image.width, image.height));
+  analysisCanvas.width = Math.max(2, Math.round(image.width * scale));
+  analysisCanvas.height = Math.max(2, Math.round(image.height * scale));
+  const context = analysisCanvas.getContext('2d', { willReadFrequently: true });
+  context.drawImage(image, 0, 0, analysisCanvas.width, analysisCanvas.height);
+  const data = context.getImageData(0, 0, analysisCanvas.width, analysisCanvas.height).data;
+  const colors = new Set();
+  let edgeTotal = 0;
+  let edgeSamples = 0;
+  const luminance = index => data[index] * .2126 + data[index + 1] * .7152 + data[index + 2] * .0722;
+  for (let y = 0; y < analysisCanvas.height; y += 1) {
+    for (let x = 0; x < analysisCanvas.width; x += 1) {
+      const index = (y * analysisCanvas.width + x) * 4;
+      colors.add(`${data[index] >> 5},${data[index + 1] >> 5},${data[index + 2] >> 5}`);
+      if (x && y) {
+        edgeTotal += Math.abs(luminance(index) - luminance(index - 4));
+        edgeTotal += Math.abs(luminance(index) - luminance(index - analysisCanvas.width * 4));
+        edgeSamples += 2;
+      }
+    }
+  }
+  const edgeScore = Math.min(1, edgeTotal / Math.max(1, edgeSamples) / 32);
+  const colorScore = Math.min(1, colors.size / 220);
+  const score = edgeScore * .65 + colorScore * .35;
+  const level = score > .58 ? 'High detail' : score > .34 ? 'Moderate detail' : 'Simple detail';
+  const detailCells = score > .58 ? 170 : score > .34 ? 130 : 90;
+  const sourceShortSide = Math.min(image.width, image.height);
+  const shortestCells = Math.max(40, Math.min(detailCells, sourceShortSide));
+  const resolutionLimited = sourceShortSide < detailCells;
+  return { level, shortestCells, colorGroups: colors.size, resolutionLimited, sourceWidth: image.width, sourceHeight: image.height };
+}
+
+function updateRecommendation() {
+  if (!imageAnalysis || !selectedImage) return;
+  const [, pitchValue] = document.querySelector('#drillProfile').value.split(':');
+  const pitch = Number(pitchValue);
+  let columns;
+  let rows;
+  if (aspectRatio >= 1) {
+    rows = imageAnalysis.shortestCells;
+    columns = Math.ceil(rows * aspectRatio);
+  } else {
+    columns = imageAnalysis.shortestCells;
+    rows = Math.ceil(columns / aspectRatio);
+  }
+  const width = columns * pitch / 25.4;
+  const height = rows * pitch / 25.4;
+  recommendedDimensions = { width, height };
+  document.querySelector('#recommendedSize').textContent = `${width.toFixed(1)} × ${height.toFixed(1)} in minimum`;
+  const resolutionNote = imageAnalysis.resolutionLimited ? ' · limited by source resolution' : '';
+  document.querySelector('#recommendationReason').textContent = `${imageAnalysis.level} · ${imageAnalysis.colorGroups} color groups · ${columns} × ${rows} cells${resolutionNote}`;
+  document.querySelector('#useRecommendedSize').disabled = false;
 }
 
 function updateGridMath(changedField) {
@@ -110,6 +171,13 @@ continueBtn.addEventListener('click', (event) => {
 
 document.querySelectorAll('#targetWidth, #targetHeight').forEach(field => field.addEventListener('input', () => updateGridMath(field)));
 document.querySelectorAll('#drillProfile, #roundingMode, #lockRatio').forEach(field => field.addEventListener('change', () => updateGridMath()));
+document.querySelector('#drillProfile').addEventListener('change', updateRecommendation);
+document.querySelector('#useRecommendedSize').addEventListener('click', () => {
+  if (!recommendedDimensions) return;
+  document.querySelector('#targetWidth').value = recommendedDimensions.width.toFixed(1);
+  document.querySelector('#targetHeight').value = recommendedDimensions.height.toFixed(1);
+  updateGridMath();
+});
 document.querySelector('#roundingMode').addEventListener('change', event => {
   const explanations = {
     round: 'Uses the closest whole number of drills, so the finished size changes as little as possible.',
