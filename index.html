@@ -41,8 +41,8 @@
         <section id="setupView" class="setup-view" hidden>
           <button id="backToProjects" class="back-btn">← Back to projects</button>
           <div class="setup-heading">
-            <div><p class="eyebrow">NEW PATTERN · STEP 1 OF 3</p><h1>Import &amp; setup</h1><p class="subtitle">Confirm your artwork and choose the finished drill dimensions.</p></div>
-            <div class="stepper"><span class="current">1</span><i></i><span>2</span><i></i><span>3</span></div>
+            <div><p class="eyebrow">NEW PATTERN · STEP 1 OF 4</p><h1>Artwork &amp; setup</h1><p class="subtitle">Confirm the artwork and production constraints before conversion.</p></div>
+            <div class="stepper" aria-label="Pattern workflow"><span class="current" title="Artwork & setup">1</span><i></i><span title="Convert & clean up">2</span><i></i><span title="Edit & assign materials">3</span><i></i><span title="Preflight & export">4</span></div>
           </div>
           <div class="setup-layout">
             <article class="artwork-panel">
@@ -58,6 +58,7 @@
               <div class="field-row"><label>Width<div class="input-unit"><input id="targetWidth" type="number" min="1" step="0.1" value="12" /><span>in</span></div></label><label>Height<div class="input-unit"><input id="targetHeight" type="number" min="1" step="0.1" value="16" /><span>in</span></div></label></div>
               <label>Cell rounding<select id="roundingMode"><option value="round">Nearest whole cell — recommended</option><option value="floor">Round down — do not exceed size</option><option value="ceil">Round up — meet minimum size</option></select><small id="roundingHelp" class="field-help">Uses the closest whole number of drills, so the finished size changes as little as possible.</small></label>
               <label>Maximum drill colors<select id="maxColors"><option value="all">Use all available colors</option><option value="12">12 colors</option><option value="18">18 colors</option><option value="24" selected>24 colors</option><option value="36">36 colors</option><option value="48">48 colors</option></select></label>
+              <label>Automatic cleanup<select id="cleanupStrength"><option value="off">Off — preserve every sampled cell</option><option value="light">Light — isolated cells only</option><option value="balanced" selected>Balanced — recommended</option><option value="strong">Strong — simplify small details</option></select><small class="field-help">Runs during conversion, before manual editing. No automatic cleanup is applied after you begin editing cells.</small></label>
               <fieldset class="vendor-field"><legend>Drill vendors <small>Select one or more</small></legend><div class="vendor-options"><label><input class="vendor-choice" type="checkbox" value="DMC" checked /><span><b>DMC</b><small>Primary palette</small></span></label><label><input class="vendor-choice" type="checkbox" value="ArtDot" /><span><b>ArtDot</b><small>Alternate stock</small></span></label><label><input class="vendor-choice" type="checkbox" value="Diamond Dotz" /><span><b>Diamond Dotz</b><small>Alternate stock</small></span></label><label><input class="vendor-choice" type="checkbox" value="Custom supplier" /><span><b>Custom</b><small>In-house palette</small></span></label></div><p id="vendorError" class="field-error" hidden>Select at least one drill vendor.</p></fieldset>
               <label class="check-row"><input id="lockRatio" type="checkbox" checked /><span>Lock artwork aspect ratio</span></label>
               <div class="calculation-card"><div><span>Calculated grid</span><strong id="gridDimensions">122 × 163 cells</strong></div><div><span>Actual print size</span><strong id="actualSize">12.01 × 16.04 in</strong></div><div><span>Size difference</span><strong id="sizeDifference">+0.01 × +0.04 in</strong></div></div>
@@ -66,7 +67,7 @@
             </aside>
           </div>
           <section id="patternResult" class="pattern-result" hidden>
-            <div class="result-copy"><p class="eyebrow">PATTERN PREVIEW</p><h2>Your first pattern is ready</h2><p>The preview preserves the grid’s true proportions. Zoom in to inspect individual drill cells and grid lines.</p><div id="patternStats" class="pattern-stats"></div><div id="patternVendors" class="pattern-vendors"></div><div id="patternPalette" class="pattern-palette" aria-label="Generated color palette"></div></div>
+            <div class="result-copy"><p class="eyebrow">STEP 2 · CONVERT &amp; CLEAN UP</p><h2>Your cleaned pattern is ready</h2><p>Automated color reduction and cleanup are complete before manual cell editing. Zoom in and regenerate until this foundation is right.</p><div class="workflow-note">✓ Later editing will not trigger another automatic cleanup pass.</div><div id="patternStats" class="pattern-stats"></div><div id="patternVendors" class="pattern-vendors"></div><div id="patternPalette" class="pattern-palette" aria-label="Generated color palette"></div></div>
             <div class="preview-workspace">
               <div class="preview-toolbar"><label>Zoom <input id="previewZoom" type="range" min="2" max="10" value="4" /></label><label class="check-row"><input id="showGrid" type="checkbox" checked /> Show grid</label><button id="downloadPreview" class="secondary-btn">Download preview</button></div>
               <div id="patternViewport" class="pattern-viewport"><canvas id="patternCanvas" width="1" height="1"></canvas></div>

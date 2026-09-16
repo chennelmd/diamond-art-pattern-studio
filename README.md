@@ -22,4 +22,5 @@ Then open `http://localhost:4173`.
 - Shape-accurate round and square drill rendering with explained whole-cell rounding choices
 - Artwork-based minimum-size recommendations using measured edge detail, color variety, aspect ratio, resolution, and drill pitch
 - Non-destructive crop positioning and configurable transparent-PNG background flattening
+- Conversion-stage confetti cleanup that is completed before manual pattern editing
 - Fully local static assets and application behavior
