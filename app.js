@@ -435,17 +435,12 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const isOccupied = index => transparencyMode === 'fill' || pixels[index + 3] >= opacityThreshold;
   const maximumColors = document.querySelector('#maxColors').value;
   const limit = maximumColors === 'all' ? Infinity : Number(maximumColors);
-  const palette = PatternConversion.buildAdaptivePalette(pixels, isOccupied, limit);
-  const exactColorIndex = maximumColors === 'all'
-    ? new Map(palette.map((color, index) => [color.join(','), index]))
-    : null;
+  const adaptivePalette = PatternConversion.buildAdaptivePalette(pixels, isOccupied, limit);
+  const dmcAssignments = PatternConversion.mapPaletteToReference(adaptivePalette, DmcPalette);
+  const palette = dmcAssignments.map(color => color.rgb);
   const mappedCells = [];
   for (let index = 0; index < pixels.length; index += 4) {
     if (!isOccupied(index)) { mappedCells.push(-1); continue; }
-    if (exactColorIndex) {
-      mappedCells.push(exactColorIndex.get(`${pixels[index]},${pixels[index + 1]},${pixels[index + 2]}`));
-      continue;
-    }
     let closest = 0;
     let distance = Infinity;
     palette.forEach((color, paletteIndex) => {
@@ -461,11 +456,11 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   cells.forEach(color => { if (color !== -1) counts[color] += 1; });
   const occupiedCells = cells.filter(color => color !== -1).length;
   const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
-  generatedPattern = { columns, rows, palette, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
+  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
   renderPattern();
   document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
-  document.querySelector('#patternPalette').innerHTML = palette.map((color, index) => `<span title="Color ${index + 1}: ${counts[index].toLocaleString()} drills" style="--swatch:rgb(${color.join(',')})"></span>`).join('');
+  document.querySelector('#patternPalette').innerHTML = dmcAssignments.map((color, index) => `<span title="DMC ${color.code} · ${color.name} · ${counts[index].toLocaleString()} drills"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><b>${color.code}</b><small>${counts[index].toLocaleString()}</small></span>`).join('');
   const result = document.querySelector('#patternResult');
   result.hidden = false;
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });

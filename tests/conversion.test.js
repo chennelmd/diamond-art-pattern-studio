@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
-const { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, selectConnectedBackground, subtleSolidShades } = require('../conversion.js');
+const { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades } = require('../conversion.js');
+const dmcPalette = require('../dmc-colors.js');
 
 function pixels(colors) {
   return new Uint8ClampedArray(colors.flatMap(color => [...color, 255]));
@@ -22,6 +23,13 @@ assert.ok(new Set(reduced.map(color => color[0])).size === 8, 'A gradient should
 
 const repeated = buildAdaptivePalette(gradient, () => true, 8);
 assert.deepEqual(repeated, reduced, 'Adaptive reduction must be deterministic.');
+
+assert.equal(dmcPalette.length, 447, 'The diamond-drill reference must contain 447 DMC colors.');
+assert.equal(new Set(dmcPalette.map(color => color.code)).size, 447, 'DMC codes must be unique.');
+assert.deepEqual(dmcPalette.find(color => color.code === '310').rgb, [0, 0, 0]);
+assert.deepEqual(dmcPalette.find(color => color.code === 'B5200').rgb, [255, 255, 255]);
+const referenceMapping = mapPaletteToReference([[1, 1, 1], [254, 254, 254]], dmcPalette);
+assert.deepEqual(referenceMapping.map(color => color.code), ['310', 'B5200']);
 
 const dominantWhite = pixels([
   ...Array.from({ length: 900 }, () => [255, 255, 255]),

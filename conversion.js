@@ -85,6 +85,39 @@
     return Math.sqrt((left[0] - right[0]) ** 2 + (left[1] - right[1]) ** 2 + (left[2] - right[2]) ** 2);
   }
 
+  function rgbToLab(color) {
+    const linear = color.map(channel => {
+      const value = channel / 255;
+      return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+    });
+    const x = (linear[0] * .4124 + linear[1] * .3576 + linear[2] * .1805) / .95047;
+    const y = linear[0] * .2126 + linear[1] * .7152 + linear[2] * .0722;
+    const z = (linear[0] * .0193 + linear[1] * .1192 + linear[2] * .9505) / 1.08883;
+    const transform = value => value > .008856 ? value ** (1 / 3) : 7.787 * value + 16 / 116;
+    const fx = transform(x); const fy = transform(y); const fz = transform(z);
+    return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+  }
+
+  function mapPaletteToReference(palette, referenceColors) {
+    const references = referenceColors.map(color => ({ ...color, lab: rgbToLab(color.rgb) }));
+    const selected = [];
+    const selectedCodes = new Set();
+    palette.forEach(source => {
+      const lab = rgbToLab(source);
+      let nearest = references[0];
+      let nearestDistance = Infinity;
+      references.forEach(reference => {
+        const distance = (lab[0] - reference.lab[0]) ** 2 + (lab[1] - reference.lab[1]) ** 2 + (lab[2] - reference.lab[2]) ** 2;
+        if (distance < nearestDistance) { nearest = reference; nearestDistance = distance; }
+      });
+      if (!selectedCodes.has(nearest.code)) {
+        selectedCodes.add(nearest.code);
+        selected.push({ code: nearest.code, name: nearest.name, rgb: [...nearest.rgb] });
+      }
+    });
+    return selected;
+  }
+
   function selectConnectedBackground(pixelData, width, height, seedX, seedY, tolerance) {
     const mask = new Uint8Array(width * height);
     const startX = Math.max(0, Math.min(width - 1, Math.round(seedX)));
@@ -181,6 +214,6 @@
     });
   }
 
-  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, selectConnectedBackground, subtleSolidShades };
+  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternConversion;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

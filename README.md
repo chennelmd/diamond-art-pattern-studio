@@ -23,7 +23,7 @@ Then open `http://localhost:4173`.
 - Server-side PNG/JPEG/TIFF validation and decoding with 100 MB and 100-megapixel safety limits
 - Clear errors for corrupted, unsupported, oversized, or undecodable artwork
 - Automatic photo/illustration detection with resampling chosen for smooth photographs or crisp graphic artwork
-- Deterministic adaptive color reduction that allocates the selected color limit to the artwork instead of fixed RGB bands
+- Deterministic adaptive color reduction mapped to the standard 447-color DMC drill reference with visible codes and drill counts
 - Connected click-and-tolerance background selection with preserve, automatic/manual 3–5 shade simplification, and solid-color replacement
 - Import and setup workspace with image metadata, aspect-ratio locking, drill profiles, multi-vendor selection, and exact whole-cell grid calculations
 - Color-reduced, true-proportion drill-grid preview with zoom, grid inspection, palette counts, and PNG download
@@ -33,3 +33,9 @@ Then open `http://localhost:4173`.
 - Conversion-stage confetti cleanup that is completed before manual pattern editing
 - Transparent-region modes for full-drill fill, empty partial-drill areas, or later selective editing
 - Fully local static assets and application behavior
+
+## DMC color reference
+
+The MVP uses the standard 447-color DMC-numbered subset commonly used for diamond drills. Codes, names, and screen RGB approximations are derived from the numeric columns of the [CrossStitchCreator DMC reference table](https://github.com/adrianj/CrossStitchCreator/blob/master/CrossStitchCreator/Resources/DMC%20Cotton%20Floss%20converted%20to%20RGB%20Values.csv); discontinued floss-only shades are excluded. The software matches colors perceptually in CIELAB space.
+
+Screen colors are approximations and physical resin can vary by supplier and production lot. A future supplier-calibration layer should override RGB measurements without changing the saved DMC codes. DMC is a trademark of its respective owner; this project is not affiliated with or endorsed by DMC.
