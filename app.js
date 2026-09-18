@@ -382,7 +382,7 @@ document.querySelector('#backToProjects').addEventListener('click', () => {
   document.querySelector('#dashboardView').hidden = false;
   document.querySelector('header').hidden = false;
 });
-document.querySelector('#generatePattern').addEventListener('click', () => {
+document.querySelector('#generatePattern').addEventListener('click', async () => {
   if (!selectedImage) return;
   const vendors = [...document.querySelectorAll('.vendor-choice:checked')].map(choice => choice.value);
   const vendorError = document.querySelector('#vendorError');
@@ -411,6 +411,13 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
     document.querySelector('#sourceFrame').scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
+  const generateButton = document.querySelector('#generatePattern');
+  const originalButtonText = generateButton.innerHTML;
+  generateButton.disabled = true;
+  generateButton.textContent = 'Generating…';
+  document.querySelector('#setupWarning').textContent = 'Matching artwork to the DMC drill palette…';
+  await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+  try {
   let backgroundMask = null;
   if (backgroundMode !== 'preserve') {
     backgroundMask = PatternConversion.selectConnectedBackground(
@@ -436,7 +443,11 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const maximumColors = document.querySelector('#maxColors').value;
   const limit = maximumColors === 'all' ? Infinity : Number(maximumColors);
   const adaptivePalette = PatternConversion.buildAdaptivePalette(pixels, isOccupied, limit);
-  const dmcAssignments = PatternConversion.mapPaletteToReference(adaptivePalette, DmcPalette);
+  const dmcReference = globalThis.DmcPalette;
+  if (!Array.isArray(dmcReference) || dmcReference.length !== 447) {
+    throw new Error('The DMC color reference did not load. Refresh the page and try again.');
+  }
+  const dmcAssignments = PatternConversion.mapPaletteToReference(adaptivePalette, dmcReference);
   const palette = dmcAssignments.map(color => color.rgb);
   const mappedCells = [];
   for (let index = 0; index < pixels.length; index += 4) {
@@ -464,6 +475,15 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const result = document.querySelector('#patternResult');
   result.hidden = false;
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelector('#setupWarning').textContent = 'ⓘ Dimensions are rounded to the nearest whole drill cell.';
+  } catch (error) {
+    console.error('Pattern generation failed:', error);
+    document.querySelector('#setupWarning').textContent = `⚠ Pattern generation failed: ${error.message}`;
+    document.querySelector('#setupWarning').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } finally {
+    generateButton.disabled = false;
+    generateButton.innerHTML = originalButtonText;
+  }
 });
 
 document.querySelectorAll('.vendor-choice').forEach(choice => choice.addEventListener('change', () => {
