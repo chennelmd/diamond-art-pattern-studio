@@ -55,8 +55,18 @@
     if (!Number.isFinite(maximumColors) || colors.length <= maximumColors) {
       return colors.sort((left, right) => right.count - left.count).map(entry => entry.color);
     }
-    const boxes = [boxDetails(colors)];
-    while (boxes.length < maximumColors) {
+    const sortedColors = colors.sort((left, right) => right.count - left.count);
+    const totalPopulation = sortedColors.reduce((total, entry) => total + entry.count, 0);
+    const protectedThreshold = Math.max(2, Math.ceil(totalPopulation * .002));
+    const protectedColors = sortedColors.filter(entry => entry.count >= protectedThreshold).slice(0, maximumColors);
+    if (protectedColors.length >= maximumColors) return protectedColors.map(entry => entry.color);
+
+    const protectedSet = new Set(protectedColors);
+    const remainingColors = sortedColors.filter(entry => !protectedSet.has(entry));
+    if (!remainingColors.length) return protectedColors.map(entry => entry.color);
+    const remainingSlots = maximumColors - protectedColors.length;
+    const boxes = [boxDetails(remainingColors)];
+    while (boxes.length < remainingSlots) {
       boxes.sort((left, right) => right.score - left.score);
       const index = boxes.findIndex(box => box.colors.length > 1 && Math.max(...box.ranges) > 0);
       if (index === -1) break;
@@ -65,7 +75,10 @@
       if (!split) { boxes.push(box); break; }
       boxes.push(...split);
     }
-    return boxes.sort((left, right) => right.population - left.population).map(averageBox);
+    return [
+      ...protectedColors.map(entry => entry.color),
+      ...boxes.sort((left, right) => right.population - left.population).map(averageBox),
+    ];
   }
 
   root.PatternConversion = { buildAdaptivePalette };
