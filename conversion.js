@@ -159,6 +159,41 @@
     return selected.sort((left, right) => right.count - left.count).map(({ lab, count, ...color }) => color);
   }
 
+  function consolidateRareColors(assignments, cells, minimumDrills) {
+    const counts = new Array(assignments.length).fill(0);
+    cells.forEach(index => { if (index >= 0) counts[index] += 1; });
+    let keptIndices = counts.map((count, index) => ({ count, index }))
+      .filter(entry => entry.count >= minimumDrills)
+      .map(entry => entry.index);
+    if (!keptIndices.length && assignments.length) {
+      keptIndices = [counts.indexOf(Math.max(...counts))];
+    }
+    const keptAssignments = keptIndices.map(index => assignments[index]);
+    const keptLabs = keptAssignments.map(color => rgbToLab(color.rgb));
+    const directIndex = new Map(keptIndices.map((oldIndex, newIndex) => [oldIndex, newIndex]));
+    const replacementIndex = new Map();
+    assignments.forEach((assignment, oldIndex) => {
+      if (directIndex.has(oldIndex) || !keptAssignments.length) return;
+      const lab = rgbToLab(assignment.rgb);
+      let nearest = 0;
+      let distance = Infinity;
+      keptLabs.forEach((candidate, newIndex) => {
+        const candidateDistance = (lab[0] - candidate[0]) ** 2 + (lab[1] - candidate[1]) ** 2 + (lab[2] - candidate[2]) ** 2;
+        if (candidateDistance < distance) { distance = candidateDistance; nearest = newIndex; }
+      });
+      replacementIndex.set(oldIndex, nearest);
+    });
+    const consolidatedCells = cells.map(index => index < 0 ? -1 : (directIndex.get(index) ?? replacementIndex.get(index)));
+    const consolidatedCounts = new Array(keptAssignments.length).fill(0);
+    consolidatedCells.forEach(index => { if (index >= 0) consolidatedCounts[index] += 1; });
+    return {
+      assignments: keptAssignments,
+      cells: consolidatedCells,
+      counts: consolidatedCounts,
+      removedColors: assignments.length - keptAssignments.length,
+    };
+  }
+
   function selectConnectedBackground(pixelData, width, height, seedX, seedY, tolerance) {
     const mask = new Uint8Array(width * height);
     const startX = Math.max(0, Math.min(width - 1, Math.round(seedX)));
@@ -255,6 +290,6 @@
     });
   }
 
-  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades };
+  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, consolidateRareColors, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternConversion;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

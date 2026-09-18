@@ -446,8 +446,8 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   if (!Array.isArray(dmcReference) || dmcReference.length !== 447) {
     throw new Error('The DMC color reference did not load. Refresh the page and try again.');
   }
-  const dmcAssignments = PatternConversion.buildReferencePalette(pixels, isOccupied, limit, dmcReference);
-  const palette = dmcAssignments.map(color => color.rgb);
+  let dmcAssignments = PatternConversion.buildReferencePalette(pixels, isOccupied, limit, dmcReference);
+  let palette = dmcAssignments.map(color => color.rgb);
   const mappedCells = [];
   for (let index = 0; index < pixels.length; index += 4) {
     if (!isOccupied(index)) { mappedCells.push(-1); continue; }
@@ -461,14 +461,16 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   }
   const cleanupStrength = document.querySelector('#cleanupStrength').value;
   const cleanup = cleanPatternCells(mappedCells, columns, rows, cleanupStrength);
-  const cells = cleanup.cells;
-  const counts = new Array(palette.length).fill(0);
-  cells.forEach(color => { if (color !== -1) counts[color] += 1; });
+  const consolidation = PatternConversion.consolidateRareColors(dmcAssignments, cleanup.cells, 11);
+  dmcAssignments = consolidation.assignments;
+  palette = dmcAssignments.map(color => color.rgb);
+  const cells = consolidation.cells;
+  const counts = consolidation.counts;
   const occupiedCells = cells.filter(color => color !== -1).length;
   const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
-  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
+  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
   renderPattern();
-  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
+  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
   document.querySelector('#patternPalette').innerHTML = dmcAssignments.map((color, index) => `<span title="DMC ${color.code} · ${color.name} · ${counts[index].toLocaleString()} drills"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><b>${color.code}</b><small>${counts[index].toLocaleString()}</small></span>`).join('');
   const result = document.querySelector('#patternResult');

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades } = require('../conversion.js');
+const { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, consolidateRareColors, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades } = require('../conversion.js');
 const dmcPalette = require('../dmc-colors.js');
 
 function pixels(colors) {
@@ -41,6 +41,18 @@ assert.equal(cappedReference.length, 3, 'A finite DMC cap should select that man
 assert.equal(new Set(cappedReference.map(color => color.code)).size, 3);
 const allReference = buildReferencePalette(fourDmcColors, () => true, Infinity, dmcPalette);
 assert.equal(allReference.length, 4, 'All available matches should include every distinct usable DMC code.');
+const consolidated = consolidateRareColors(
+  [
+    { code: '310', name: 'Black', rgb: [0, 0, 0] },
+    { code: '317', name: 'Pewter Gray', rgb: [108, 108, 108] },
+    { code: 'B5200', name: 'Snow White', rgb: [255, 255, 255] },
+  ],
+  [...Array(12).fill(0), ...Array(5).fill(1)],
+  11,
+);
+assert.deepEqual(consolidated.assignments.map(color => color.code), ['310']);
+assert.deepEqual(consolidated.counts, [17]);
+assert.equal(consolidated.removedColors, 2, 'Zero-count and ten-or-fewer colors should be omitted.');
 
 const dominantWhite = pixels([
   ...Array.from({ length: 900 }, () => [255, 255, 255]),
