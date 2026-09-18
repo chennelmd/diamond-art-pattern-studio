@@ -33,6 +33,28 @@ def error(message: str, status: int, code: str):
     return jsonify({"error": message, "code": code}), status
 
 
+def classify_artwork(image: Image.Image) -> tuple[str, float]:
+    """Distinguish flat-edged artwork from continuously varying photographs."""
+    sample = image.convert("RGBA")
+    sample.thumbnail((256, 256), Image.Resampling.LANCZOS)
+    background = Image.new("RGBA", sample.size, "white")
+    background.alpha_composite(sample)
+    pixels = list(background.convert("RGB").getdata())
+    width, height = sample.size
+    flat_pairs = 0
+    compared_pairs = 0
+    for y in range(height):
+        row_start = y * width
+        for x in range(width - 1):
+            left = pixels[row_start + x]
+            right = pixels[row_start + x + 1]
+            compared_pairs += 1
+            if max(abs(left[channel] - right[channel]) for channel in range(3)) <= 8:
+                flat_pairs += 1
+    flatness = flat_pairs / max(1, compared_pairs)
+    return ("illustration" if flatness >= 0.52 else "photo", flatness)
+
+
 @app.errorhandler(413)
 def too_large(_exception):
     return error(
@@ -78,6 +100,7 @@ def inspect_artwork():
                 return error("The image dimensions are too small to create a pattern.", 422, "invalid_dimensions")
 
             normalized = ImageOps.exif_transpose(opened)
+            artwork_type, artwork_flatness = classify_artwork(normalized)
             has_transparency = normalized.mode in {"RGBA", "LA"} or (
                 normalized.mode == "P" and "transparency" in normalized.info
             )
@@ -115,6 +138,8 @@ def inspect_artwork():
             "width": width,
             "height": height,
             "hasTransparency": has_transparency,
+            "artworkType": artwork_type,
+            "artworkFlatness": round(artwork_flatness, 4),
             "frameCount": frame_count,
             "previewUrl": f"/api/artwork/{asset_id}/{preview_name}",
         }

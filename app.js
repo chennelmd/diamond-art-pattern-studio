@@ -89,7 +89,8 @@ async function importArtwork(file) {
     document.querySelector('#sourceDimensions').textContent = `${result.width} × ${result.height} px`;
     document.querySelector('#sourceFormat').textContent = result.format;
     const frameNote = result.frameCount > 1 ? ` · Using page 1 of ${result.frameCount}` : '';
-    document.querySelector('#sourceMeta').textContent = `${(result.fileSize / 1024 / 1024).toFixed(2)} MB · Validated and staged locally${frameNote}`;
+    const typeLabel = result.artworkType === 'illustration' ? 'Illustration detected' : 'Photo detected';
+    document.querySelector('#sourceMeta').textContent = `${(result.fileSize / 1024 / 1024).toFixed(2)} MB · Validated and staged locally · ${typeLabel}${frameNote}`;
     document.querySelector('#targetHeight').value = (12 / aspectRatio).toFixed(1);
     imageAnalysis = analyzeImage(selectedImage);
     imageAnalysis.hasTransparency = result.hasTransparency;
@@ -344,6 +345,9 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   sample.width = columns;
   sample.height = rows;
   const sampleContext = sample.getContext('2d');
+  const illustrationMode = sourceAsset?.artworkType === 'illustration';
+  sampleContext.imageSmoothingEnabled = !illustrationMode;
+  if (!illustrationMode) sampleContext.imageSmoothingQuality = 'high';
   const transparencyMode = document.querySelector('input[name="transparencyMode"]:checked').value;
   if (transparencyMode === 'fill') {
     sampleContext.fillStyle = document.querySelector('#backgroundColor').value;
@@ -360,13 +364,16 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
     if (!isOccupied(index)) continue;
     const color = [pixels[index], pixels[index + 1], pixels[index + 2]];
     const key = color.map(channel => Math.min(255, Math.round(channel / 32) * 32)).join(',');
-    const entry = buckets.get(key) || { color, count: 0 };
+    const entry = buckets.get(key) || { totals: [0, 0, 0], count: 0 };
+    entry.totals[0] += color[0];
+    entry.totals[1] += color[1];
+    entry.totals[2] += color[2];
     entry.count += 1;
     buckets.set(key, entry);
   }
   const availableColors = [...buckets.values()].sort((a, b) => b.count - a.count);
   const limit = maximumColors === 'all' ? availableColors.length : Number(maximumColors);
-  const palette = availableColors.slice(0, limit).map(entry => entry.color);
+  const palette = availableColors.slice(0, limit).map(entry => entry.totals.map(total => Math.round(total / entry.count)));
   const mappedCells = [];
   for (let index = 0; index < pixels.length; index += 4) {
     if (!isOccupied(index)) { mappedCells.push(-1); continue; }
@@ -384,9 +391,9 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const counts = new Array(palette.length).fill(0);
   cells.forEach(color => { if (color !== -1) counts[color] += 1; });
   const occupiedCells = cells.filter(color => color !== -1).length;
-  generatedPattern = { columns, rows, palette, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, transparencyMode, occupiedCells };
+  generatedPattern = { columns, rows, palette, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo' };
   renderPattern();
-  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
+  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span><span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
   document.querySelector('#patternPalette').innerHTML = palette.map((color, index) => `<span title="Color ${index + 1}: ${counts[index].toLocaleString()} drills" style="--swatch:rgb(${color.join(',')})"></span>`).join('');
   const result = document.querySelector('#patternResult');

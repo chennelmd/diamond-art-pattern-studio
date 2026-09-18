@@ -57,6 +57,21 @@ class ArtworkImportTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.get_json()["code"], "decode_failed")
 
+    def test_detects_flat_illustration(self):
+        image = Image.new("RGB", (128, 128), "white")
+        for x in range(64):
+            for y in range(128):
+                image.putpixel((x, y), (20, 60, 140))
+        artwork_type, flatness = server.classify_artwork(image)
+        self.assertEqual(artwork_type, "illustration")
+        self.assertGreater(flatness, 0.9)
+
+    def test_detects_continuously_varying_photo(self):
+        image = Image.effect_noise((128, 128), 100).convert("RGB")
+        artwork_type, flatness = server.classify_artwork(image)
+        self.assertEqual(artwork_type, "photo")
+        self.assertLess(flatness, 0.52)
+
 
 if __name__ == "__main__":
     unittest.main()
