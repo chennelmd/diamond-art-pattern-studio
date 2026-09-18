@@ -163,11 +163,11 @@ function analyzeImage(image) {
 
 function cropRegion() {
   const zoom = Number(document.querySelector('#cropZoom').value) / 100;
-  const width = selectedImage.width / zoom;
-  const height = selectedImage.height / zoom;
-  const x = (selectedImage.width - width) * Number(document.querySelector('#cropX').value) / 100;
-  const y = (selectedImage.height - height) * Number(document.querySelector('#cropY').value) / 100;
-  return { x, y, width, height };
+  const focusX = Number(document.querySelector('#cropX').value) / 100;
+  const focusY = Number(document.querySelector('#cropY').value) / 100;
+  const width = Math.max(1, Number(document.querySelector('#targetWidth').value) || 1);
+  const height = Math.max(1, Number(document.querySelector('#targetHeight').value) || 1);
+  return PatternGeometry.calculateCropRegion(selectedImage.width, selectedImage.height, width / height, zoom, focusX, focusY);
 }
 
 function updateCropPreview() {
@@ -177,11 +177,21 @@ function updateCropPreview() {
   const y = Number(document.querySelector('#cropY').value);
   const color = document.querySelector('#backgroundColor').value;
   const preview = document.querySelector('#sourcePreview');
+  const crop = cropRegion();
+  const targetRatio = crop.width / crop.height;
+  const retainedPercent = crop.width * crop.height / (selectedImage.width * selectedImage.height) * 100;
   preview.style.transform = `scale(${zoom / 100})`;
   preview.style.transformOrigin = `${x}% ${y}%`;
-  document.querySelector('#sourceFrame').style.background = color;
+  preview.style.objectPosition = `${x}% ${y}%`;
+  const frame = document.querySelector('#sourceFrame');
+  frame.style.background = color;
+  frame.style.aspectRatio = `${targetRatio}`;
+  frame.style.maxWidth = targetRatio < 1 ? `${560 * targetRatio}px` : '100%';
   document.querySelector('#cropZoomValue').textContent = `${zoom}%`;
   document.querySelector('#backgroundValue').textContent = color.toUpperCase();
+  document.querySelector('#cropSummary').textContent = retainedPercent > 99.5
+    ? 'The full artwork fits the selected pattern ratio.'
+    : `${retainedPercent.toFixed(0)}% of the artwork is inside the crop. Adjust the focus controls to reposition it.`;
   document.querySelector('#patternResult').hidden = true;
 }
 
@@ -227,6 +237,7 @@ function updateGridMath(changedField) {
   document.querySelector('#gridDimensions').textContent = `${columns} × ${rows} cells`;
   document.querySelector('#actualSize').textContent = `${actualWidth.toFixed(2)} × ${actualHeight.toFixed(2)} in`;
   document.querySelector('#sizeDifference').textContent = `${signed(actualWidth - width)} × ${signed(actualHeight - height)} in`;
+  if (selectedImage) updateCropPreview();
   return { columns, rows };
 }
 

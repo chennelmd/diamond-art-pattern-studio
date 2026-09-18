@@ -48,7 +48,7 @@
             <article class="artwork-panel">
               <div class="panel-title"><div><h2>Source artwork</h2><p id="sourceMeta">Preparing image…</p></div><button id="replaceArtwork" class="text-btn">Replace</button></div>
               <div id="sourceFrame" class="image-stage"><img id="sourcePreview" alt="Selected source artwork" /></div>
-              <div class="crop-controls"><label>Crop zoom <input id="cropZoom" type="range" min="100" max="300" value="100" /><output id="cropZoomValue">100%</output></label><label>Horizontal focus <input id="cropX" type="range" min="0" max="100" value="50" /></label><label>Vertical focus <input id="cropY" type="range" min="0" max="100" value="50" /></label><div class="background-control"><label for="backgroundColor">Transparent background</label><input id="backgroundColor" type="color" value="#ffffff" /><span id="backgroundValue">#FFFFFF</span><button id="resetCrop" type="button">Reset crop</button></div></div>
+              <div class="crop-controls"><label>Crop zoom <input id="cropZoom" type="range" min="100" max="300" value="100" /><output id="cropZoomValue">100%</output></label><label>Horizontal focus <input id="cropX" type="range" min="0" max="100" value="50" /></label><label>Vertical focus <input id="cropY" type="range" min="0" max="100" value="50" /></label><p id="cropSummary" class="crop-summary">The full artwork fits the selected pattern ratio.</p><div class="background-control"><label for="backgroundColor">Transparent background</label><input id="backgroundColor" type="color" value="#ffffff" /><span id="backgroundValue">#FFFFFF</span><button id="resetCrop" type="button">Reset crop</button></div></div>
               <fieldset id="transparencyOptions" class="transparency-options" hidden><legend>Transparent areas detected</legend><label><input type="radio" name="transparencyMode" value="fill" checked /><span><b>Fill with drills</b><small>Flatten transparency using the background color above.</small></span></label><label><input type="radio" name="transparencyMode" value="empty" /><span><b>Leave empty</b><small>Only visible artwork receives drills.</small></span></label><label><input type="radio" name="transparencyMode" value="decide" /><span><b>Decide in editor</b><small>Start transparent areas blank, then add drills selectively in Step 3.</small></span></label><div id="opacityControl" class="opacity-control" hidden><label>Include pixels at least <output id="opacityValue">10%</output> opaque</label><input id="opacityThreshold" type="range" min="1" max="100" value="10" /></div></fieldset>
               <div class="image-facts"><span><small>FILE</small><strong id="sourceName">—</strong></span><span><small>DIMENSIONS</small><strong id="sourceDimensions">—</strong></span><span><small>FORMAT</small><strong id="sourceFormat">—</strong></span></div>
             </article>
@@ -128,6 +128,7 @@
         <button id="continueBtn" class="primary-btn" value="default" disabled>Continue to setup <span>→</span></button>
       </form>
     </dialog>
+    <script src="geometry.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
