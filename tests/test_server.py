@@ -41,6 +41,12 @@ class ArtworkImportTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["format"], "JPEG")
 
+    def test_serves_dmc_color_reference(self):
+        response = self.client.get("/dmc-colors.js?v=20260919")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"DmcPalette", response.data)
+        response.close()
+
     def test_imports_tiff_without_browser_tiff_support(self):
         response = self.import_image("TIFF", "art.tiff")
         self.assertEqual(response.status_code, 200)
