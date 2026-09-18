@@ -63,6 +63,8 @@ let aspectRatio = 3 / 4;
 let generatedPattern = null;
 let imageAnalysis = null;
 let recommendedDimensions = null;
+let backgroundSelection = null;
+let selectingBackground = false;
 
 async function importArtwork(file) {
   const status = document.querySelector('#fileName');
@@ -75,6 +77,10 @@ async function importArtwork(file) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || 'The artwork could not be imported.');
     sourceAsset = result;
+    backgroundSelection = null;
+    selectingBackground = false;
+    document.querySelector('#sourceFrame').classList.remove('background-pick-active');
+    document.querySelector('#backgroundSelectionStatus').textContent = 'Click the background in the artwork preview.';
     selectedImage = new Image();
     await new Promise((resolve, reject) => {
       selectedImage.onload = resolve;
@@ -196,6 +202,34 @@ function updateCropPreview() {
   document.querySelector('#patternResult').hidden = true;
 }
 
+function updateBackgroundTreatmentControls() {
+  const mode = document.querySelector('#backgroundTreatment').value;
+  document.querySelector('#backgroundSelectionControls').hidden = mode === 'preserve';
+  document.querySelector('#simplifyControls').hidden = mode !== 'simplify';
+  document.querySelector('#solidBackgroundControl').hidden = mode !== 'solid';
+  document.querySelector('#manualShadeColors').hidden = document.querySelector('#backgroundShadeSource').value !== 'manual';
+  if (generatedPattern) document.querySelector('#patternResult').hidden = true;
+}
+
+function sampleSelectedBackground(event) {
+  if (!selectingBackground || !selectedImage) return;
+  const frame = document.querySelector('#sourceFrame');
+  const bounds = frame.getBoundingClientRect();
+  const u = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+  const v = Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height));
+  const crop = cropRegion();
+  const sampleCanvas = document.createElement('canvas');
+  sampleCanvas.width = 1; sampleCanvas.height = 1;
+  const sampleContext = sampleCanvas.getContext('2d');
+  sampleContext.drawImage(selectedImage, crop.x + crop.width * u, crop.y + crop.height * v, 1, 1, 0, 0, 1, 1);
+  const color = [...sampleContext.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+  backgroundSelection = { u, v, color };
+  selectingBackground = false;
+  frame.classList.remove('background-pick-active');
+  document.querySelector('#backgroundSelectionStatus').textContent = `Background selected at ${Math.round(u * 100)}%, ${Math.round(v * 100)}% · RGB ${color.join(', ')}`;
+  if (generatedPattern) document.querySelector('#patternResult').hidden = true;
+}
+
 function updateRecommendation() {
   if (!imageAnalysis || !selectedImage) return;
   const [, pitchValue] = document.querySelector('#drillProfile').value.split(':');
@@ -311,6 +345,21 @@ document.querySelector('#resetCrop').addEventListener('click', () => {
   document.querySelector('#cropY').value = 50;
   updateCropPreview();
 });
+document.querySelector('#backgroundTreatment').addEventListener('change', updateBackgroundTreatmentControls);
+document.querySelector('#backgroundShadeSource').addEventListener('change', updateBackgroundTreatmentControls);
+document.querySelector('#selectBackground').addEventListener('click', () => {
+  selectingBackground = true;
+  document.querySelector('#sourceFrame').classList.add('background-pick-active');
+  document.querySelector('#backgroundSelectionStatus').textContent = 'Click the intended background in the artwork preview.';
+});
+document.querySelector('#sourceFrame').addEventListener('click', sampleSelectedBackground);
+document.querySelector('#backgroundTolerance').addEventListener('input', event => {
+  document.querySelector('#backgroundToleranceValue').textContent = event.target.value;
+  if (generatedPattern) document.querySelector('#patternResult').hidden = true;
+});
+document.querySelectorAll('#backgroundShadeCount, #backgroundDarkColor, #backgroundLightColor, #solidBackgroundColor').forEach(control => control.addEventListener('input', () => {
+  if (generatedPattern) document.querySelector('#patternResult').hidden = true;
+}));
 document.querySelectorAll('input[name="transparencyMode"]').forEach(control => control.addEventListener('change', event => {
   document.querySelector('#opacityControl').hidden = event.target.value === 'fill';
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
@@ -356,6 +405,31 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const crop = cropRegion();
   sampleContext.drawImage(selectedImage, crop.x, crop.y, crop.width, crop.height, 0, 0, sample.width, sample.height);
   const pixels = sample.getContext('2d').getImageData(0, 0, columns, rows).data;
+  const backgroundMode = document.querySelector('#backgroundTreatment').value;
+  if (backgroundMode !== 'preserve' && !backgroundSelection) {
+    document.querySelector('#backgroundSelectionStatus').textContent = 'Select the background on the artwork before generating.';
+    document.querySelector('#sourceFrame').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  let backgroundMask = null;
+  if (backgroundMode !== 'preserve') {
+    backgroundMask = PatternConversion.selectConnectedBackground(
+      pixels,
+      columns,
+      rows,
+      backgroundSelection.u * (columns - 1),
+      backgroundSelection.v * (rows - 1),
+      Number(document.querySelector('#backgroundTolerance').value),
+    );
+    PatternConversion.applyBackgroundTreatment(pixels, backgroundMask, {
+      mode: backgroundMode,
+      shadeCount: Number(document.querySelector('#backgroundShadeCount').value),
+      shadeSource: document.querySelector('#backgroundShadeSource').value,
+      darkColor: document.querySelector('#backgroundDarkColor').value,
+      lightColor: document.querySelector('#backgroundLightColor').value,
+      solidColor: document.querySelector('#solidBackgroundColor').value,
+    });
+  }
   const opacityThreshold = Number(document.querySelector('#opacityThreshold').value) / 100 * 255;
   const isOccupied = index => transparencyMode === 'fill' || pixels[index + 3] >= opacityThreshold;
   const maximumColors = document.querySelector('#maxColors').value;
@@ -385,9 +459,10 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const counts = new Array(palette.length).fill(0);
   cells.forEach(color => { if (color !== -1) counts[color] += 1; });
   const occupiedCells = cells.filter(color => color !== -1).length;
-  generatedPattern = { columns, rows, palette, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo' };
+  const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
+  generatedPattern = { columns, rows, palette, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
   renderPattern();
-  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span><span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
+  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
   document.querySelector('#patternPalette').innerHTML = palette.map((color, index) => `<span title="Color ${index + 1}: ${counts[index].toLocaleString()} drills" style="--swatch:rgb(${color.join(',')})"></span>`).join('');
   const result = document.querySelector('#patternResult');

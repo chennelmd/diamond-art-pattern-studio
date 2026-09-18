@@ -81,6 +81,91 @@
     ];
   }
 
-  root.PatternConversion = { buildAdaptivePalette };
+  function colorDistance(left, right) {
+    return Math.sqrt((left[0] - right[0]) ** 2 + (left[1] - right[1]) ** 2 + (left[2] - right[2]) ** 2);
+  }
+
+  function selectConnectedBackground(pixelData, width, height, seedX, seedY, tolerance) {
+    const mask = new Uint8Array(width * height);
+    const startX = Math.max(0, Math.min(width - 1, Math.round(seedX)));
+    const startY = Math.max(0, Math.min(height - 1, Math.round(seedY)));
+    const startIndex = startY * width + startX;
+    const seedOffset = startIndex * 4;
+    const seedColor = [pixelData[seedOffset], pixelData[seedOffset + 1], pixelData[seedOffset + 2]];
+    const localLimit = Math.max(6, tolerance * 1.35);
+    const globalLimit = Math.max(18, tolerance * 4.5);
+    const queue = [startIndex];
+    mask[startIndex] = 1;
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const index = queue[cursor];
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const offset = index * 4;
+      const current = [pixelData[offset], pixelData[offset + 1], pixelData[offset + 2]];
+      const neighbors = [];
+      if (x > 0) neighbors.push(index - 1);
+      if (x < width - 1) neighbors.push(index + 1);
+      if (y > 0) neighbors.push(index - width);
+      if (y < height - 1) neighbors.push(index + width);
+      neighbors.forEach(neighbor => {
+        if (mask[neighbor]) return;
+        const neighborOffset = neighbor * 4;
+        const color = [pixelData[neighborOffset], pixelData[neighborOffset + 1], pixelData[neighborOffset + 2]];
+        if (colorDistance(color, current) <= localLimit && colorDistance(color, seedColor) <= globalLimit) {
+          mask[neighbor] = 1;
+          queue.push(neighbor);
+        }
+      });
+    }
+    return mask;
+  }
+
+  function hexToRgb(hex) {
+    const value = hex.replace('#', '');
+    return [0, 2, 4].map(index => Number.parseInt(value.slice(index, index + 2), 16));
+  }
+
+  function interpolateShades(darkHex, lightHex, count) {
+    const dark = hexToRgb(darkHex);
+    const light = hexToRgb(lightHex);
+    return Array.from({ length: count }, (_, index) => {
+      const amount = count === 1 ? 0 : index / (count - 1);
+      return dark.map((channel, channelIndex) => Math.round(channel + (light[channelIndex] - channel) * amount));
+    });
+  }
+
+  function applyBackgroundTreatment(pixelData, mask, options) {
+    if (options.mode === 'preserve') return;
+    const shadeCount = Number(options.shadeCount) || 4;
+    const backgroundOffsets = [];
+    mask.forEach((selected, index) => { if (selected) backgroundOffsets.push(index * 4); });
+    if (!backgroundOffsets.length) return;
+    let shades;
+    if (options.mode === 'solid') {
+      shades = [hexToRgb(options.solidColor)];
+    } else if (options.shadeSource === 'manual') {
+      shades = interpolateShades(options.darkColor, options.lightColor, shadeCount);
+    } else {
+      const selectedOffsets = new Set(backgroundOffsets);
+      shades = buildAdaptivePalette(pixelData, offset => selectedOffsets.has(offset), shadeCount);
+    }
+    shades.sort((left, right) =>
+      (left[0] * .2126 + left[1] * .7152 + left[2] * .0722)
+      - (right[0] * .2126 + right[1] * .7152 + right[2] * .0722));
+    const luminances = backgroundOffsets.map(offset => pixelData[offset] * .2126 + pixelData[offset + 1] * .7152 + pixelData[offset + 2] * .0722);
+    const minimum = Math.min(...luminances);
+    const maximum = Math.max(...luminances);
+    backgroundOffsets.forEach((offset, position) => {
+      let shade;
+      if (shades.length === 1) shade = shades[0];
+      else {
+        const normalized = (luminances[position] - minimum) / Math.max(1, maximum - minimum);
+        shade = shades[Math.min(shades.length - 1, Math.round(normalized * (shades.length - 1)))];
+      }
+      pixelData[offset] = shade[0]; pixelData[offset + 1] = shade[1]; pixelData[offset + 2] = shade[2];
+    });
+  }
+
+  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, selectConnectedBackground };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternConversion;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

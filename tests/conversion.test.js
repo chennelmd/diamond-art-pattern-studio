@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { buildAdaptivePalette } = require('../conversion.js');
+const { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, selectConnectedBackground } = require('../conversion.js');
 
 function pixels(colors) {
   return new Uint8ClampedArray(colors.flatMap(color => [...color, 255]));
@@ -38,5 +38,25 @@ assert.ok(
   backgroundAware.filter(color => color.some(channel => channel < 180)).length >= 10,
   'Most palette slots should remain available to describe the subject.',
 );
+
+assert.deepEqual(
+  interpolateShades('#000000', '#ffffff', 3),
+  [[0, 0, 0], [128, 128, 128], [255, 255, 255]],
+  'Manual shades should interpolate evenly between the chosen colors.',
+);
+
+const connectedPixels = pixels([
+  [240, 100, 60], [245, 120, 70], [250, 140, 80],
+  [20, 120, 40], [22, 125, 42], [24, 130, 44],
+]);
+const connectedMask = selectConnectedBackground(connectedPixels, 3, 2, 0, 0, 30);
+assert.deepEqual([...connectedMask], [1, 1, 1, 0, 0, 0], 'Selection should stay in the connected background region.');
+
+const solidPixels = pixels([[200, 80, 40], [210, 90, 50], [20, 120, 40]]);
+applyBackgroundTreatment(solidPixels, new Uint8Array([1, 1, 0]), {
+  mode: 'solid', solidColor: '#336699', shadeCount: 4,
+});
+assert.deepEqual([...solidPixels.slice(0, 8)], [51, 102, 153, 255, 51, 102, 153, 255]);
+assert.deepEqual([...solidPixels.slice(8, 12)], [20, 120, 40, 255], 'Unselected subject pixels must not change.');
 
 console.log('adaptive color conversion tests passed');
