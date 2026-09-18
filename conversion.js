@@ -94,6 +94,7 @@
     const seedColor = [pixelData[seedOffset], pixelData[seedOffset + 1], pixelData[seedOffset + 2]];
     const localLimit = Math.max(6, tolerance * 1.35);
     const globalLimit = Math.max(18, tolerance * 4.5);
+    const edgeLimit = Math.max(36, Math.min(52, tolerance * 1.1));
     const queue = [startIndex];
     mask[startIndex] = 1;
     for (let cursor = 0; cursor < queue.length; cursor += 1) {
@@ -111,7 +112,11 @@
         if (mask[neighbor]) return;
         const neighborOffset = neighbor * 4;
         const color = [pixelData[neighborOffset], pixelData[neighborOffset + 1], pixelData[neighborOffset + 2]];
-        if (colorDistance(color, current) <= localLimit && colorDistance(color, seedColor) <= globalLimit) {
+        const localDistance = colorDistance(color, current);
+        // A stricter per-step limit prevents tolerance from crossing the strong
+        // contrast at anti-aliased text and subject edges while still following
+        // the small color steps in an ordinary gradient.
+        if (localDistance <= Math.min(localLimit, edgeLimit) && colorDistance(color, seedColor) <= globalLimit) {
           mask[neighbor] = 1;
           queue.push(neighbor);
         }
@@ -134,6 +139,14 @@
     });
   }
 
+  function subtleSolidShades(solidHex) {
+    const base = hexToRgb(solidHex);
+    return [-.07, 0, .07].map(amount => base.map(channel => {
+      const target = amount < 0 ? 0 : 255;
+      return Math.round(channel + (target - channel) * Math.abs(amount));
+    }));
+  }
+
   function applyBackgroundTreatment(pixelData, mask, options) {
     if (options.mode === 'preserve') return;
     const shadeCount = Number(options.shadeCount) || 4;
@@ -142,7 +155,9 @@
     if (!backgroundOffsets.length) return;
     let shades;
     if (options.mode === 'solid') {
-      shades = [hexToRgb(options.solidColor)];
+      shades = options.solidStyle === 'flat'
+        ? [hexToRgb(options.solidColor)]
+        : subtleSolidShades(options.solidColor);
     } else if (options.shadeSource === 'manual') {
       shades = interpolateShades(options.darkColor, options.lightColor, shadeCount);
     } else {
@@ -166,6 +181,6 @@
     });
   }
 
-  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, selectConnectedBackground };
+  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, selectConnectedBackground, subtleSolidShades };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternConversion;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

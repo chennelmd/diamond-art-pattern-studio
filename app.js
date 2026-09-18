@@ -357,7 +357,7 @@ document.querySelector('#backgroundTolerance').addEventListener('input', event =
   document.querySelector('#backgroundToleranceValue').textContent = event.target.value;
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
 });
-document.querySelectorAll('#backgroundShadeCount, #backgroundDarkColor, #backgroundLightColor, #solidBackgroundColor').forEach(control => control.addEventListener('input', () => {
+document.querySelectorAll('#backgroundShadeCount, #backgroundDarkColor, #backgroundLightColor, #solidBackgroundColor, #solidBackgroundStyle').forEach(control => control.addEventListener('input', () => {
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
 }));
 document.querySelectorAll('input[name="transparencyMode"]').forEach(control => control.addEventListener('change', event => {
@@ -428,6 +428,7 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
       darkColor: document.querySelector('#backgroundDarkColor').value,
       lightColor: document.querySelector('#backgroundLightColor').value,
       solidColor: document.querySelector('#solidBackgroundColor').value,
+      solidStyle: document.querySelector('#solidBackgroundStyle').value,
     });
   }
   const opacityThreshold = Number(document.querySelector('#opacityThreshold').value) / 100 * 255;

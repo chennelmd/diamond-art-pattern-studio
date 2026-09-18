@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, selectConnectedBackground } = require('../conversion.js');
+const { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, selectConnectedBackground, subtleSolidShades } = require('../conversion.js');
 
 function pixels(colors) {
   return new Uint8ClampedArray(colors.flatMap(color => [...color, 255]));
@@ -52,11 +52,27 @@ const connectedPixels = pixels([
 const connectedMask = selectConnectedBackground(connectedPixels, 3, 2, 0, 0, 30);
 assert.deepEqual([...connectedMask], [1, 1, 1, 0, 0, 0], 'Selection should stay in the connected background region.');
 
+const edgeProtectedPixels = pixels([
+  [240, 130, 90], [242, 132, 92], [244, 134, 94], [246, 136, 96], [248, 138, 98],
+  [240, 130, 90], [235, 125, 87], [175, 85, 60], [100, 45, 35], [70, 30, 25],
+  [240, 130, 90], [242, 132, 92], [244, 134, 94], [246, 136, 96], [248, 138, 98],
+]);
+const edgeProtectedMask = selectConnectedBackground(edgeProtectedPixels, 5, 3, 0, 0, 60);
+assert.equal(edgeProtectedMask[9], 0, 'High tolerance must not leak through anti-aliased artwork edges.');
+assert.equal(edgeProtectedMask[14], 1, 'Low-contrast background gradients should remain connected around an edge.');
+
 const solidPixels = pixels([[200, 80, 40], [210, 90, 50], [20, 120, 40]]);
 applyBackgroundTreatment(solidPixels, new Uint8Array([1, 1, 0]), {
-  mode: 'solid', solidColor: '#336699', shadeCount: 4,
+  mode: 'solid', solidColor: '#336699', solidStyle: 'flat', shadeCount: 4,
 });
 assert.deepEqual([...solidPixels.slice(0, 8)], [51, 102, 153, 255, 51, 102, 153, 255]);
 assert.deepEqual([...solidPixels.slice(8, 12)], [20, 120, 40, 255], 'Unselected subject pixels must not change.');
+
+assert.deepEqual(subtleSolidShades('#804020'), [[119, 60, 30], [128, 64, 32], [137, 77, 48]]);
+const depthPixels = pixels([[20, 20, 20], [128, 128, 128], [240, 240, 240]]);
+applyBackgroundTreatment(depthPixels, new Uint8Array([1, 1, 1]), {
+  mode: 'solid', solidColor: '#804020', solidStyle: 'subtle', shadeCount: 4,
+});
+assert.deepEqual([...depthPixels.filter((_, index) => index % 4 !== 3)], [119, 60, 30, 128, 64, 32, 137, 77, 48]);
 
 console.log('adaptive color conversion tests passed');
