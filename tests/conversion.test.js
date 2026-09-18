@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades } = require('../conversion.js');
+const { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades } = require('../conversion.js');
 const dmcPalette = require('../dmc-colors.js');
 
 function pixels(colors) {
@@ -30,6 +30,17 @@ assert.deepEqual(dmcPalette.find(color => color.code === '310').rgb, [0, 0, 0]);
 assert.deepEqual(dmcPalette.find(color => color.code === 'B5200').rgb, [255, 255, 255]);
 const referenceMapping = mapPaletteToReference([[1, 1, 1], [254, 254, 254]], dmcPalette);
 assert.deepEqual(referenceMapping.map(color => color.code), ['310', 'B5200']);
+const fourDmcColors = pixels([
+  ...Array.from({ length: 8 }, () => [0, 0, 0]),
+  ...Array.from({ length: 6 }, () => [255, 255, 255]),
+  ...Array.from({ length: 4 }, () => [227, 29, 66]),
+  ...Array.from({ length: 2 }, () => [5, 101, 23]),
+]);
+const cappedReference = buildReferencePalette(fourDmcColors, () => true, 3, dmcPalette);
+assert.equal(cappedReference.length, 3, 'A finite DMC cap should select that many distinct usable codes.');
+assert.equal(new Set(cappedReference.map(color => color.code)).size, 3);
+const allReference = buildReferencePalette(fourDmcColors, () => true, Infinity, dmcPalette);
+assert.equal(allReference.length, 4, 'All available matches should include every distinct usable DMC code.');
 
 const dominantWhite = pixels([
   ...Array.from({ length: 900 }, () => [255, 255, 255]),

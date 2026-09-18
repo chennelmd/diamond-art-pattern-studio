@@ -118,6 +118,47 @@
     return selected;
   }
 
+  function buildReferencePalette(pixelData, isOccupied, maximumColors, referenceColors) {
+    const references = referenceColors.map(color => ({ ...color, lab: rgbToLab(color.rgb) }));
+    const matches = new Map();
+    colorHistogram(pixelData, isOccupied).forEach(entry => {
+      const lab = rgbToLab(entry.color);
+      let nearest = references[0];
+      let nearestDistance = Infinity;
+      references.forEach(reference => {
+        const distance = (lab[0] - reference.lab[0]) ** 2 + (lab[1] - reference.lab[1]) ** 2 + (lab[2] - reference.lab[2]) ** 2;
+        if (distance < nearestDistance) { nearest = reference; nearestDistance = distance; }
+      });
+      const match = matches.get(nearest.code) || { code: nearest.code, name: nearest.name, rgb: [...nearest.rgb], lab: nearest.lab, count: 0 };
+      match.count += entry.count;
+      matches.set(nearest.code, match);
+    });
+
+    const available = [...matches.values()].sort((left, right) => right.count - left.count);
+    if (!Number.isFinite(maximumColors) || available.length <= maximumColors) {
+      return available.map(({ lab, count, ...color }) => color);
+    }
+
+    // Start with the most-used shade, then add shades that contribute both
+    // meaningful coverage and perceptual separation from the current set.
+    const selected = [available[0]];
+    const remaining = available.slice(1);
+    while (selected.length < maximumColors && remaining.length) {
+      let bestIndex = 0;
+      let bestScore = -1;
+      remaining.forEach((candidate, index) => {
+        const separation = Math.min(...selected.map(chosen =>
+          (candidate.lab[0] - chosen.lab[0]) ** 2
+          + (candidate.lab[1] - chosen.lab[1]) ** 2
+          + (candidate.lab[2] - chosen.lab[2]) ** 2));
+        const score = separation * Math.sqrt(candidate.count);
+        if (score > bestScore) { bestScore = score; bestIndex = index; }
+      });
+      selected.push(remaining.splice(bestIndex, 1)[0]);
+    }
+    return selected.sort((left, right) => right.count - left.count).map(({ lab, count, ...color }) => color);
+  }
+
   function selectConnectedBackground(pixelData, width, height, seedX, seedY, tolerance) {
     const mask = new Uint8Array(width * height);
     const startX = Math.max(0, Math.min(width - 1, Math.round(seedX)));
@@ -214,6 +255,6 @@
     });
   }
 
-  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades };
+  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternConversion;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

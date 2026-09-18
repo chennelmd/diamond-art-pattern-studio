@@ -442,12 +442,11 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const isOccupied = index => transparencyMode === 'fill' || pixels[index + 3] >= opacityThreshold;
   const maximumColors = document.querySelector('#maxColors').value;
   const limit = maximumColors === 'all' ? Infinity : Number(maximumColors);
-  const adaptivePalette = PatternConversion.buildAdaptivePalette(pixels, isOccupied, limit);
   const dmcReference = globalThis.DmcPalette;
   if (!Array.isArray(dmcReference) || dmcReference.length !== 447) {
     throw new Error('The DMC color reference did not load. Refresh the page and try again.');
   }
-  const dmcAssignments = PatternConversion.mapPaletteToReference(adaptivePalette, dmcReference);
+  const dmcAssignments = PatternConversion.buildReferencePalette(pixels, isOccupied, limit, dmcReference);
   const palette = dmcAssignments.map(color => color.rgb);
   const mappedCells = [];
   for (let index = 0; index < pixels.length; index += 4) {
