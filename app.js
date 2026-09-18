@@ -43,46 +43,75 @@ drawGem();
 const dialog = document.querySelector('#projectDialog');
 const input = document.querySelector('#artwork');
 const continueBtn = document.querySelector('#continueBtn');
+const maximumArtworkBytes = 100 * 1024 * 1024;
 document.querySelector('#startProject').addEventListener('click', () => dialog.showModal());
 document.querySelector('.new-project').addEventListener('click', () => dialog.showModal());
 input.addEventListener('change', () => {
   const file = input.files[0];
+  if (file && file.size > maximumArtworkBytes) {
+    document.querySelector('#fileName').textContent = 'Import failed: This file is larger than the 100 MB limit.';
+    continueBtn.disabled = true;
+    return;
+  }
   document.querySelector('#fileName').textContent = file ? `✓ ${file.name} selected` : '';
   continueBtn.disabled = !file;
-  if (file && !document.querySelector('#setupView').hidden) showSetup(file);
+  if (file && !document.querySelector('#setupView').hidden) importArtwork(file);
 });
 let selectedImage = null;
+let sourceAsset = null;
 let aspectRatio = 3 / 4;
 let generatedPattern = null;
 let imageAnalysis = null;
 let recommendedDimensions = null;
 
-function showSetup(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
+async function importArtwork(file) {
+  const status = document.querySelector('#fileName');
+  continueBtn.disabled = true;
+  status.textContent = `Checking ${file.name}…`;
+  const formData = new FormData();
+  formData.append('artwork', file);
+  try {
+    const response = await fetch('/api/artwork/inspect', { method: 'POST', body: formData });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'The artwork could not be imported.');
+    sourceAsset = result;
     selectedImage = new Image();
-    selectedImage.onload = () => {
-      aspectRatio = selectedImage.width / selectedImage.height;
-      document.querySelector('#sourceFrame').style.aspectRatio = `${selectedImage.width} / ${selectedImage.height}`;
-      document.querySelector('#sourcePreview').src = reader.result;
-      updateCropPreview();
-      document.querySelector('#sourceName').textContent = file.name;
-      document.querySelector('#sourceDimensions').textContent = `${selectedImage.width} × ${selectedImage.height} px`;
-      document.querySelector('#sourceFormat').textContent = (file.type.split('/')[1] || 'image').toUpperCase();
-      document.querySelector('#sourceMeta').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB · Original preserved locally`;
-      document.querySelector('#targetHeight').value = (12 / aspectRatio).toFixed(1);
-      imageAnalysis = analyzeImage(selectedImage);
-      document.querySelector('#transparencyOptions').hidden = !imageAnalysis.hasTransparency;
-      if (imageAnalysis.hasTransparency) document.querySelector('#sourceMeta').textContent += ' · Transparency detected';
-      updateRecommendation();
-      updateGridMath();
-    };
-    selectedImage.src = reader.result;
-  };
-  reader.readAsDataURL(file);
-  document.querySelector('#dashboardView').hidden = true;
-  document.querySelector('#setupView').hidden = false;
-  document.querySelector('header').hidden = true;
+    await new Promise((resolve, reject) => {
+      selectedImage.onload = resolve;
+      selectedImage.onerror = () => reject(new Error('The validated preview could not be loaded.'));
+      selectedImage.src = result.previewUrl;
+    });
+    aspectRatio = result.width / result.height;
+    document.querySelector('#sourceFrame').style.aspectRatio = `${result.width} / ${result.height}`;
+    document.querySelector('#sourcePreview').src = result.previewUrl;
+    updateCropPreview();
+    document.querySelector('#sourceName').textContent = result.fileName;
+    document.querySelector('#sourceDimensions').textContent = `${result.width} × ${result.height} px`;
+    document.querySelector('#sourceFormat').textContent = result.format;
+    const frameNote = result.frameCount > 1 ? ` · Using page 1 of ${result.frameCount}` : '';
+    document.querySelector('#sourceMeta').textContent = `${(result.fileSize / 1024 / 1024).toFixed(2)} MB · Validated and staged locally${frameNote}`;
+    document.querySelector('#targetHeight').value = (12 / aspectRatio).toFixed(1);
+    imageAnalysis = analyzeImage(selectedImage);
+    imageAnalysis.hasTransparency = result.hasTransparency;
+    imageAnalysis.sourceWidth = result.width;
+    imageAnalysis.sourceHeight = result.height;
+    document.querySelector('#transparencyOptions').hidden = !result.hasTransparency;
+    if (result.hasTransparency) document.querySelector('#sourceMeta').textContent += ' · Transparency detected';
+    updateRecommendation();
+    updateGridMath();
+    status.textContent = `✓ ${result.fileName} imported`;
+    continueBtn.disabled = false;
+    document.querySelector('#dashboardView').hidden = true;
+    document.querySelector('#setupView').hidden = false;
+    document.querySelector('header').hidden = true;
+    dialog.close();
+  } catch (error) {
+    sourceAsset = null;
+    selectedImage = null;
+    status.textContent = `Import failed: ${error.message}`;
+    status.style.height = 'auto';
+    continueBtn.disabled = false;
+  }
 }
 
 function analyzeImage(image) {
@@ -241,11 +270,10 @@ function cleanPatternCells(sourceCells, columns, rows, strength) {
   return { cells, changed };
 }
 
-continueBtn.addEventListener('click', (event) => {
+continueBtn.addEventListener('click', async (event) => {
   event.preventDefault();
   if (!input.files.length) return;
-  dialog.close();
-  showSetup(input.files[0]);
+  await importArtwork(input.files[0]);
 });
 
 document.querySelectorAll('#targetWidth, #targetHeight').forEach(field => field.addEventListener('input', () => updateGridMath(field)));

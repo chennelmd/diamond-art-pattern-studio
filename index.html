@@ -121,10 +121,10 @@
     <dialog id="projectDialog">
       <form method="dialog">
         <div class="dialog-head"><span class="brand-gem">◆</span><button value="cancel" aria-label="Close">×</button></div>
-        <p class="eyebrow">NEW PROJECT</p><h2>Let’s create your pattern</h2><p>Choose an artwork file to begin. Your original will be preserved.</p>
-        <label class="upload-zone" for="artwork"><span>⇧</span><strong>Drop artwork here or browse</strong><small>PNG, JPG or TIFF · up to 600 MB</small></label>
+        <p class="eyebrow">NEW PROJECT</p><h2>Let’s create your pattern</h2><p>Choose an artwork file to begin. Your original file will not be modified.</p>
+        <label class="upload-zone" for="artwork"><span>⇧</span><strong>Choose artwork to import</strong><small>PNG, JPEG or TIFF · up to 100 MB / 100 megapixels</small></label>
         <input id="artwork" type="file" accept="image/png,image/jpeg,image/tiff" hidden />
-        <div id="fileName" class="file-name"></div>
+        <div id="fileName" class="file-name" role="status" aria-live="polite"></div>
         <button id="continueBtn" class="primary-btn" value="default" disabled>Continue to setup <span>→</span></button>
       </form>
     </dialog>
