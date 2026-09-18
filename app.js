@@ -359,24 +359,18 @@ document.querySelector('#generatePattern').addEventListener('click', () => {
   const opacityThreshold = Number(document.querySelector('#opacityThreshold').value) / 100 * 255;
   const isOccupied = index => transparencyMode === 'fill' || pixels[index + 3] >= opacityThreshold;
   const maximumColors = document.querySelector('#maxColors').value;
-  const buckets = new Map();
-  for (let index = 0; index < pixels.length; index += 4) {
-    if (!isOccupied(index)) continue;
-    const color = [pixels[index], pixels[index + 1], pixels[index + 2]];
-    const key = color.map(channel => Math.min(255, Math.round(channel / 32) * 32)).join(',');
-    const entry = buckets.get(key) || { totals: [0, 0, 0], count: 0 };
-    entry.totals[0] += color[0];
-    entry.totals[1] += color[1];
-    entry.totals[2] += color[2];
-    entry.count += 1;
-    buckets.set(key, entry);
-  }
-  const availableColors = [...buckets.values()].sort((a, b) => b.count - a.count);
-  const limit = maximumColors === 'all' ? availableColors.length : Number(maximumColors);
-  const palette = availableColors.slice(0, limit).map(entry => entry.totals.map(total => Math.round(total / entry.count)));
+  const limit = maximumColors === 'all' ? Infinity : Number(maximumColors);
+  const palette = PatternConversion.buildAdaptivePalette(pixels, isOccupied, limit);
+  const exactColorIndex = maximumColors === 'all'
+    ? new Map(palette.map((color, index) => [color.join(','), index]))
+    : null;
   const mappedCells = [];
   for (let index = 0; index < pixels.length; index += 4) {
     if (!isOccupied(index)) { mappedCells.push(-1); continue; }
+    if (exactColorIndex) {
+      mappedCells.push(exactColorIndex.get(`${pixels[index]},${pixels[index + 1]},${pixels[index + 2]}`));
+      continue;
+    }
     let closest = 0;
     let distance = Infinity;
     palette.forEach((color, paletteIndex) => {

@@ -160,7 +160,7 @@ def index():
 
 @app.get("/<path:path>")
 def static_file(path: str):
-    if path not in {"app.js", "geometry.js", "styles.css"}:
+    if path not in {"app.js", "conversion.js", "geometry.js", "styles.css"}:
         return error("File not found.", 404, "not_found")
     return send_from_directory(ROOT, path)
 

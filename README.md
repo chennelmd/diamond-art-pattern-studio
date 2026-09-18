@@ -23,6 +23,7 @@ Then open `http://localhost:4173`.
 - Server-side PNG/JPEG/TIFF validation and decoding with 100 MB and 100-megapixel safety limits
 - Clear errors for corrupted, unsupported, oversized, or undecodable artwork
 - Automatic photo/illustration detection with resampling chosen for smooth photographs or crisp graphic artwork
+- Deterministic adaptive color reduction that allocates the selected color limit to the artwork instead of fixed RGB bands
 - Import and setup workspace with image metadata, aspect-ratio locking, drill profiles, multi-vendor selection, and exact whole-cell grid calculations
 - Color-reduced, true-proportion drill-grid preview with zoom, grid inspection, palette counts, and PNG download
 - Shape-accurate round and square drill rendering with explained whole-cell rounding choices
