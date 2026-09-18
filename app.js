@@ -405,6 +405,13 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const crop = cropRegion();
   sampleContext.drawImage(selectedImage, crop.x, crop.y, crop.width, crop.height, 0, 0, sample.width, sample.height);
   const pixels = sample.getContext('2d').getImageData(0, 0, columns, rows).data;
+  const opacityThreshold = Number(document.querySelector('#opacityThreshold').value) / 100 * 255;
+  const isOccupied = index => transparencyMode === 'fill' || pixels[index + 3] >= opacityThreshold;
+  const artworkCleanup = document.querySelector('#artworkColorCleanup').value;
+  const useFlatColorCleanup = artworkCleanup === 'flat' || (artworkCleanup === 'automatic' && illustrationMode);
+  const flatColorCleanup = useFlatColorCleanup
+    ? PatternConversion.flattenSimilarColors(pixels, isOccupied, 7)
+    : { colorsBefore: 0, colorsAfter: 0, changedCells: 0 };
   const backgroundMode = document.querySelector('#backgroundTreatment').value;
   if (backgroundMode !== 'preserve' && !backgroundSelection) {
     document.querySelector('#backgroundSelectionStatus').textContent = 'Select the background on the artwork before generating.';
@@ -438,8 +445,6 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
       solidStyle: document.querySelector('#solidBackgroundStyle').value,
     });
   }
-  const opacityThreshold = Number(document.querySelector('#opacityThreshold').value) / 100 * 255;
-  const isOccupied = index => transparencyMode === 'fill' || pixels[index + 3] >= opacityThreshold;
   const maximumColors = document.querySelector('#maxColors').value;
   const limit = maximumColors === 'all' ? Infinity : Number(maximumColors);
   const dmcReference = globalThis.DmcPalette;
@@ -468,9 +473,9 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const counts = consolidation.counts;
   const occupiedCells = cells.filter(color => color !== -1).length;
   const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
-  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
+  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
   renderPattern();
-  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
+  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${flatColorCleanup.changedCells ? `<span>${flatColorCleanup.changedCells.toLocaleString()} flat-color cells cleaned</span>` : ''}${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
   document.querySelector('#patternPalette').innerHTML = dmcAssignments.map((color, index) => `<span title="DMC ${color.code} · ${color.name} · ${counts[index].toLocaleString()} drills"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><b>${color.code}</b><small>${counts[index].toLocaleString()}</small></span>`).join('');
   const result = document.querySelector('#patternResult');

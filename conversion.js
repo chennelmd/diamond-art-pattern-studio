@@ -98,6 +98,45 @@
     return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
   }
 
+  function flattenSimilarColors(pixelData, isOccupied, tolerance = 7) {
+    const histogram = colorHistogram(pixelData, isOccupied)
+      .sort((left, right) => right.count - left.count);
+    const anchors = [];
+    const replacements = new Map();
+    const maximumDistance = tolerance ** 2;
+    histogram.forEach(entry => {
+      const lab = rgbToLab(entry.color);
+      let nearest = null;
+      let nearestDistance = Infinity;
+      anchors.forEach(anchor => {
+        const distance = (lab[0] - anchor.lab[0]) ** 2
+          + (lab[1] - anchor.lab[1]) ** 2
+          + (lab[2] - anchor.lab[2]) ** 2;
+        if (distance < nearestDistance) { nearest = anchor; nearestDistance = distance; }
+      });
+      if (!nearest || nearestDistance > maximumDistance) {
+        nearest = { color: entry.color, lab };
+        anchors.push(nearest);
+      }
+      replacements.set(entry.color.join(','), nearest.color);
+    });
+
+    let changedCells = 0;
+    for (let offset = 0; offset < pixelData.length; offset += 4) {
+      if (!isOccupied(offset)) continue;
+      const key = `${pixelData[offset]},${pixelData[offset + 1]},${pixelData[offset + 2]}`;
+      const replacement = replacements.get(key);
+      if (!replacement) continue;
+      if (replacement[0] !== pixelData[offset] || replacement[1] !== pixelData[offset + 1] || replacement[2] !== pixelData[offset + 2]) {
+        changedCells += 1;
+        pixelData[offset] = replacement[0];
+        pixelData[offset + 1] = replacement[1];
+        pixelData[offset + 2] = replacement[2];
+      }
+    }
+    return { colorsBefore: histogram.length, colorsAfter: anchors.length, changedCells };
+  }
+
   function mapPaletteToReference(palette, referenceColors) {
     const references = referenceColors.map(color => ({ ...color, lab: rgbToLab(color.rgb) }));
     const selected = [];
@@ -290,6 +329,6 @@
     });
   }
 
-  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, consolidateRareColors, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades };
+  root.PatternConversion = { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, consolidateRareColors, flattenSimilarColors, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternConversion;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

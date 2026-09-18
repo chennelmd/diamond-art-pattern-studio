@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, consolidateRareColors, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades } = require('../conversion.js');
+const { applyBackgroundTreatment, buildAdaptivePalette, buildReferencePalette, consolidateRareColors, flattenSimilarColors, interpolateShades, mapPaletteToReference, selectConnectedBackground, subtleSolidShades } = require('../conversion.js');
 const dmcPalette = require('../dmc-colors.js');
 
 function pixels(colors) {
@@ -14,6 +14,15 @@ assert.deepEqual(
   [[240, 20, 20], [20, 40, 220]],
   'Exact illustration colors should remain unchanged when they fit the limit.',
 );
+
+const noisyFlatArtwork = pixels([
+  [14, 23, 56], [13, 24, 56], [12, 23, 55], [194, 48, 47], [197, 49, 48], [101, 142, 172],
+]);
+const flattened = flattenSimilarColors(noisyFlatArtwork, () => true, 7);
+assert.equal(flattened.colorsBefore, 6);
+assert.equal(flattened.colorsAfter, 3, 'Near-identical export variations should collapse to dominant flat colors.');
+assert.deepEqual([...noisyFlatArtwork.slice(0, 12)], [14, 23, 56, 255, 14, 23, 56, 255, 14, 23, 56, 255]);
+assert.deepEqual([...noisyFlatArtwork.slice(12, 20)], [194, 48, 47, 255, 194, 48, 47, 255]);
 
 const gradient = pixels(Array.from({ length: 256 }, (_, value) => [value, value, value]));
 const reduced = buildAdaptivePalette(gradient, () => true, 8);
