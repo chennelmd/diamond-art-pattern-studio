@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Diamond Art Pattern Studio</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#" aria-label="Diamond Art Pattern Studio home">
+          <span class="brand-gem">◆</span>
+          <span><strong>Diamond Art</strong><small>Pattern Studio</small></span>
+        </a>
+        <button class="new-project"><span>＋</span> New project</button>
+        <nav aria-label="Primary navigation">
+          <p class="nav-label">Workspace</p>
+          <a class="nav-item active" href="#"><span>▦</span> Projects <b>4</b></a>
+          <a class="nav-item" href="#"><span>◇</span> Palettes</a>
+          <a class="nav-item" href="#"><span>▤</span> Export profiles</a>
+          <p class="nav-label second">Resources</p>
+          <a class="nav-item" href="#"><span>◫</span> Print calibration</a>
+          <a class="nav-item" href="#"><span>?</span> Operator guide</a>
+        </nav>
+        <div class="storage-card">
+          <div class="storage-icon">▣</div>
+          <div><strong>Stored locally</strong><p>Your artwork never leaves this computer.</p></div>
+        </div>
+        <div class="user-row">
+          <div class="avatar">CH</div><div><strong>Chennel</strong><small>Studio operator</small></div><span>•••</span>
+        </div>
+      </aside>
+
+      <main>
+        <header>
+          <div><p class="eyebrow">WORKSPACE</p><h1>Your pattern studio</h1><p class="subtitle">Create, refine, and prepare artwork for production.</p></div>
+          <div class="header-actions"><button class="icon-btn" aria-label="Search">⌕</button><button class="icon-btn" aria-label="Notifications">♢<i></i></button></div>
+        </header>
+
+        <section id="setupView" class="setup-view" hidden>
+          <button id="backToProjects" class="back-btn">← Back to projects</button>
+          <div class="setup-heading">
+            <div><p class="eyebrow">NEW PATTERN · STEP 1 OF 4</p><h1>Artwork &amp; setup</h1><p class="subtitle">Confirm the artwork and production constraints before conversion.</p></div>
+            <div class="stepper" aria-label="Pattern workflow"><span class="current" title="Artwork & setup">1</span><i></i><span title="Convert & clean up">2</span><i></i><span title="Edit & assign materials">3</span><i></i><span title="Preflight & export">4</span></div>
+          </div>
+          <div class="setup-layout">
+            <article class="artwork-panel">
+              <div class="panel-title"><div><h2>Source artwork</h2><p id="sourceMeta">Preparing image…</p></div><button id="replaceArtwork" class="text-btn">Replace</button></div>
+              <div id="sourceFrame" class="image-stage"><img id="sourcePreview" alt="Selected source artwork" /></div>
+              <div class="crop-controls"><label>Crop zoom <input id="cropZoom" type="range" min="100" max="300" value="100" /><output id="cropZoomValue">100%</output></label><label>Horizontal focus <input id="cropX" type="range" min="0" max="100" value="50" /></label><label>Vertical focus <input id="cropY" type="range" min="0" max="100" value="50" /></label><p id="cropSummary" class="crop-summary">The full artwork fits the selected pattern ratio.</p><div class="background-control"><label for="backgroundColor">Transparent background</label><input id="backgroundColor" type="color" value="#ffffff" /><span id="backgroundValue">#FFFFFF</span><button id="resetCrop" type="button">Reset crop</button></div></div>
+              <fieldset id="transparencyOptions" class="transparency-options" hidden><legend>Transparent areas detected</legend><label><input type="radio" name="transparencyMode" value="fill" checked /><span><b>Fill with drills</b><small>Flatten transparency using the background color above.</small></span></label><label><input type="radio" name="transparencyMode" value="empty" /><span><b>Leave empty</b><small>Only visible artwork receives drills.</small></span></label><label><input type="radio" name="transparencyMode" value="decide" /><span><b>Decide in editor</b><small>Start transparent areas blank, then add drills selectively in Step 3.</small></span></label><div id="opacityControl" class="opacity-control" hidden><label>Include pixels at least <output id="opacityValue">10%</output> opaque</label><input id="opacityThreshold" type="range" min="1" max="100" value="10" /></div></fieldset>
+              <div class="image-facts"><span><small>FILE</small><strong id="sourceName">—</strong></span><span><small>DIMENSIONS</small><strong id="sourceDimensions">—</strong></span><span><small>FORMAT</small><strong id="sourceFormat">—</strong></span></div>
+            </article>
+            <aside class="settings-panel">
+              <div class="panel-title"><div><h2>Pattern dimensions</h2><p>Physical dimensions resolve to whole drill cells.</p></div></div>
+              <div id="sizeRecommendation" class="recommendation-card" aria-live="polite"><div><span class="recommendation-icon">✦</span><div><small>ANALYZING ARTWORK</small><strong id="recommendedSize">Preparing recommendation…</strong><p id="recommendationReason">Checking detail, edges, color variety, and source resolution.</p></div></div><button id="useRecommendedSize" type="button" disabled>Use size</button></div>
+              <label>Drill profile<select id="drillProfile"><option value="round:2.5">Round drill · 2.5 mm pitch</option><option value="square:2.5">Square drill · 2.5 mm pitch</option><option value="round:2.8">Large round · 2.8 mm pitch</option></select></label>
+              <div class="field-row"><label>Width<div class="input-unit"><input id="targetWidth" type="number" min="1" step="0.1" value="12" /><span>in</span></div></label><label>Height<div class="input-unit"><input id="targetHeight" type="number" min="1" step="0.1" value="16" /><span>in</span></div></label></div>
+              <label>Cell rounding<select id="roundingMode"><option value="round">Nearest whole cell — recommended</option><option value="floor">Round down — do not exceed size</option><option value="ceil">Round up — meet minimum size</option></select><small id="roundingHelp" class="field-help">Uses the closest whole number of drills, so the finished size changes as little as possible.</small></label>
+              <label>Maximum drill colors<select id="maxColors"><option value="12">12 colors</option><option value="18">18 colors</option><option value="24" selected>24 colors</option><option value="36">36 colors</option><option value="48">48 colors</option><option value="60">60 colors</option><option value="72">72 colors</option><option value="96">96 colors</option><option value="120">120 colors</option><option value="all">Use all available DMC matches</option></select><small class="field-help">Sets the maximum number of distinct DMC codes. Colors used for 10 drills or fewer are merged into the nearest retained shade.</small></label>
+              <label>Artwork color cleanup<select id="artworkColorCleanup"><option value="automatic" selected>Automatic — recommended</option><option value="preserve">Preserve color variation</option><option value="flat">Flat colors — merge similar shades</option></select><small class="field-help">Automatic cleans hidden color variations in illustrations while preserving natural shading in photos.</small></label>
+              <label>Automatic cleanup<select id="cleanupStrength"><option value="off">Off — preserve every sampled cell</option><option value="light">Light — isolated cells only</option><option value="balanced" selected>Balanced — recommended</option><option value="strong">Strong — simplify small details</option></select><small class="field-help">Runs during conversion, before manual editing. No automatic cleanup is applied after you begin editing cells.</small></label>
+              <fieldset class="background-treatment"><legend>Background treatment</legend><label>Treatment<select id="backgroundTreatment"><option value="preserve">Preserve gradient</option><option value="simplify">Simplify to 3–5 shades</option><option value="solid">Replace with solid color</option></select></label><div id="backgroundSelectionControls" hidden><button id="selectBackground" type="button" class="secondary-btn">Select background on artwork</button><label>Tolerance <input id="backgroundTolerance" type="range" min="5" max="100" value="35" /><output id="backgroundToleranceValue">35</output></label><p id="backgroundSelectionStatus" class="field-help" role="status">Click the background in the artwork preview.</p></div><div id="simplifyControls" class="treatment-options" hidden><label>Number of shades<select id="backgroundShadeCount"><option value="3">3 shades</option><option value="4" selected>4 shades</option><option value="5">5 shades</option></select></label><label>Shade colors<select id="backgroundShadeSource"><option value="automatic">Sample automatically</option><option value="manual">Choose light and dark colors</option></select></label><div id="manualShadeColors" class="manual-colors" hidden><label>Dark <input id="backgroundDarkColor" type="color" value="#d95d35" /></label><label>Light <input id="backgroundLightColor" type="color" value="#ffd0ad" /></label></div></div><div id="solidBackgroundControl" class="treatment-options" hidden><label>Replacement color <input id="solidBackgroundColor" type="color" value="#ef7c4f" /></label><label>Finish<select id="solidBackgroundStyle"><option value="subtle" selected>Subtle depth (recommended)</option><option value="flat">Completely flat</option></select></label><p class="treatment-help">Subtle depth keeps the chosen color while using three close shades for a more natural diamond finish.</p></div></fieldset>
+              <fieldset class="vendor-field"><legend>Drill vendors <small>Select one or more</small></legend><div class="vendor-options"><label><input class="vendor-choice" type="checkbox" value="DMC" checked /><span><b>DMC</b><small>Primary palette</small></span></label><label><input class="vendor-choice" type="checkbox" value="ArtDot" /><span><b>ArtDot</b><small>Alternate stock</small></span></label><label><input class="vendor-choice" type="checkbox" value="Diamond Dotz" /><span><b>Diamond Dotz</b><small>Alternate stock</small></span></label><label><input class="vendor-choice" type="checkbox" value="Custom supplier" /><span><b>Custom</b><small>In-house palette</small></span></label></div><p id="vendorError" class="field-error" hidden>Select at least one drill vendor.</p></fieldset>
+              <label class="check-row"><input id="lockRatio" type="checkbox" checked /><span>Lock artwork aspect ratio</span></label>
+              <div class="calculation-card"><div><span>Calculated grid</span><strong id="gridDimensions">122 × 163 cells</strong></div><div><span>Actual print size</span><strong id="actualSize">12.01 × 16.04 in</strong></div><div><span>Size difference</span><strong id="sizeDifference">+0.01 × +0.04 in</strong></div></div>
+              <div id="setupWarning" class="setup-warning">ⓘ Dimensions are rounded to the nearest whole drill cell.</div>
+              <button id="generatePattern" class="primary-btn setup-continue">Generate pattern <span>→</span></button>
+            </aside>
+          </div>
+          <section id="patternResult" class="pattern-result" hidden>
+            <div class="result-copy"><p class="eyebrow">STEP 2 · CONVERT &amp; CLEAN UP</p><h2>Your cleaned pattern is ready</h2><p>Automated color reduction and cleanup are complete before manual cell editing. Zoom in and regenerate until this foundation is right.</p><div class="workflow-note">✓ Later editing will not trigger another automatic cleanup pass.</div><div id="patternStats" class="pattern-stats"></div><div id="patternVendors" class="pattern-vendors"></div><div id="patternPalette" class="pattern-palette" aria-label="Generated color palette"></div></div>
+            <div class="preview-workspace">
+              <div class="preview-toolbar"><label>Zoom <input id="previewZoom" type="range" min="2" max="10" value="4" /></label><label class="check-row"><input id="showGrid" type="checkbox" checked /> Show grid</label><button id="downloadPreview" class="secondary-btn">Download preview</button></div>
+              <div id="patternViewport" class="pattern-viewport"><canvas id="patternCanvas" width="1" height="1"></canvas></div>
+            </div>
+          </section>
+        </section>
+
+        <div id="dashboardView">
+
+        <section class="hero-card">
+          <div class="hero-copy"><span class="pill">START A NEW DESIGN</span><h2>Turn artwork into<br /><em>something brilliant.</em></h2><p>Import your image, choose the finished size, and create a clean, production-ready drill pattern.</p><button id="startProject" class="primary-btn">Create new pattern <span>→</span></button></div>
+          <div class="hero-art" aria-hidden="true"><canvas id="gemCanvas" width="520" height="275"></canvas><div class="spark s1">✦</div><div class="spark s2">✦</div><div class="spark s3">·</div></div>
+        </section>
+
+        <section class="stats-grid">
+          <article><span class="stat-icon lavender">▦</span><div><small>ACTIVE PROJECTS</small><strong>4</strong><p>2 ready for export</p></div></article>
+          <article><span class="stat-icon mint">✓</span><div><small>PATTERNS COMPLETED</small><strong>12</strong><p>Across 8 projects</p></div></article>
+          <article><span class="stat-icon peach">◆</span><div><small>DRILL COLORS</small><strong>86</strong><p>Supplier palette</p></div></article>
+          <article><span class="stat-icon blue">◎</span><div><small>PRINT PROFILE</small><strong class="profile-name">UPrinting</strong><p><span class="dot"></span> Draft profile</p></div></article>
+        </section>
+
+        <section class="projects-section">
+          <div class="section-head"><div><h2>Recent projects</h2><p>Continue where you left off</p></div><button class="text-btn">View all projects <span>→</span></button></div>
+          <div class="project-grid" id="projectGrid">
+            <article class="project-card" tabindex="0">
+              <div class="thumb santa"><div class="mock-pattern portrait"></div><span class="status editing"><i></i> Editing</span><button aria-label="Project menu">•••</button></div>
+              <div class="project-info"><h3>Holiday Portrait</h3><p>12 × 16 in&nbsp; <b>•</b>&nbsp; 48 colors</p><div><span>Modified 2 hours ago</span><strong>80 × 107</strong></div></div>
+            </article>
+            <article class="project-card" tabindex="0">
+              <div class="thumb ornament"><div class="mock-pattern bauble">✣</div><span class="status ready"><i></i> Ready to export</span><button aria-label="Project menu">•••</button></div>
+              <div class="project-info"><h3>Winter Ornament</h3><p>10 × 10 in&nbsp; <b>•</b>&nbsp; 24 colors</p><div><span>Modified yesterday</span><strong>67 × 67</strong></div></div>
+            </article>
+            <article class="project-card" tabindex="0">
+              <div class="thumb flowers"><div class="mock-pattern floral">✿</div><span class="status review"><i></i> Needs review</span><button aria-label="Project menu">•••</button></div>
+              <div class="project-info"><h3>Garden Study</h3><p>16 × 20 in&nbsp; <b>•</b>&nbsp; 62 colors</p><div><span>Modified Sep 12</span><strong>107 × 133</strong></div></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="production-row">
+          <div><span class="section-icon">✓</span><div><h3>Production checklist</h3><p>Before sending your next pattern to print</p></div></div>
+          <ul><li class="done"><span>✓</span><div><strong>Calibrate your drill pitch</strong><small>Last checked Sep 10</small></div></li><li><span>2</span><div><strong>Confirm manufacturer profile</strong><small>4 settings need review</small></div></li><li><span>3</span><div><strong>Run a scale test print</strong><small>Print the 100 mm calibration bar</small></div></li></ul>
+          <button class="secondary-btn">Open checklist</button>
+        </section>
+        <footer><span><b>◆</b> Diamond Art Pattern Studio</span><span>Local workspace · Autosave enabled <i></i></span></footer>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="projectDialog">
+      <form method="dialog">
+        <div class="dialog-head"><span class="brand-gem">◆</span><button value="cancel" aria-label="Close">×</button></div>
+        <p class="eyebrow">NEW PROJECT</p><h2>Let’s create your pattern</h2><p>Choose an artwork file to begin. Your original file will not be modified.</p>
+        <label class="upload-zone" for="artwork"><span>⇧</span><strong>Choose artwork to import</strong><small>PNG, JPEG or TIFF · up to 100 MB / 100 megapixels</small></label>
+        <input id="artwork" type="file" accept="image/png,image/jpeg,image/tiff" hidden />
+        <div id="fileName" class="file-name" role="status" aria-live="polite"></div>
+        <button id="continueBtn" class="primary-btn" value="default" disabled>Continue to setup <span>→</span></button>
+      </form>
+    </dialog>
+    <script src="geometry.js?v=20260919"></script>
+    <script src="dmc-colors.js?v=20260919"></script>
+    <script src="conversion.js?v=20260919"></script>
+    <script src="app.js?v=20260919"></script>
+  </body>
+</html>
