@@ -2,6 +2,8 @@
 
 A local-first workspace prototype for creating and managing production-ready diamond-art patterns.
 
+Product requirements, including professional-print sizing and exact grid-scaling rules, are documented in [the application specification](SPEC.md).
+
 ## Run locally
 
 Python 3.10+ is required. Create an environment and install the local image-processing dependencies:
