@@ -246,9 +246,11 @@ function updateRecommendation() {
   const width = columns * pitch / 10;
   const height = rows * pitch / 10;
   recommendedDimensions = { width, height };
+  const printWidth = Math.ceil(width / 2.54);
+  const printHeight = Math.ceil(height / 2.54);
   document.querySelector('#recommendedSize').textContent = `${width.toFixed(1)} × ${height.toFixed(1)} cm minimum`;
   const resolutionNote = imageAnalysis.resolutionLimited ? ' · limited by source resolution' : '';
-  document.querySelector('#recommendationReason').textContent = `${imageAnalysis.level} · ${imageAnalysis.colorGroups} color groups · ${columns} × ${rows} cells${resolutionNote}`;
+  document.querySelector('#recommendationReason').textContent = `${imageAnalysis.level} · ${columns} × ${rows} cells · fits a ${printWidth} × ${printHeight} in print file${resolutionNote}`;
   document.querySelector('#useRecommendedSize').disabled = false;
 }
 
@@ -270,7 +272,10 @@ function updateGridMath(changedField) {
   const signed = value => `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
   document.querySelector('#gridDimensions').textContent = `${columns} × ${rows} cells`;
   document.querySelector('#actualSize').textContent = `${actualWidth.toFixed(2)} × ${actualHeight.toFixed(2)} cm`;
+  document.querySelector('#actualSizeInches').textContent = `${layout.exactWidthIn.toFixed(2)} × ${layout.exactHeightIn.toFixed(2)} in`;
+  document.querySelector('#recommendedPrintSize').textContent = `${layout.recommendedWidthIn} × ${layout.recommendedHeightIn} in`;
   document.querySelector('#sizeDifference').textContent = `${signed(actualWidth - width)} × ${signed(actualHeight - height)} cm`;
+  document.querySelector('#setupWarning').textContent = `ⓘ Do not round the diamond area. Use a ${layout.recommendedWidthIn} × ${layout.recommendedHeightIn} in print file; the extra space becomes centered margins.`;
   if (generatedPattern) document.querySelector('#preflightPanel').hidden = true;
   if (selectedImage) updateCropPreview();
   return layout;
@@ -482,7 +487,7 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const result = document.querySelector('#patternResult');
   result.hidden = false;
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  document.querySelector('#setupWarning').textContent = 'ⓘ Dimensions are rounded to the nearest whole drill cell.';
+  document.querySelector('#setupWarning').textContent = `ⓘ Keep the ${printLayout.exactWidthIn.toFixed(2)} × ${printLayout.exactHeightIn.toFixed(2)} in diamond area exact; use a ${printLayout.recommendedWidthIn} × ${printLayout.recommendedHeightIn} in print file.`;
   } catch (error) {
     console.error('Pattern generation failed:', error);
     document.querySelector('#setupWarning').textContent = `⚠ Pattern generation failed: ${error.message}`;

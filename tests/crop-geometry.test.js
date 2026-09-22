@@ -38,6 +38,13 @@ const incompatible = calculatePrintLayout(30, 40, 2.5, { printWidthIn: 11, print
 assert.equal(incompatible.compatible, false);
 assert.ok(incompatible.marginXIn < 0);
 
+const decimalInches = calculatePrintLayout(42.5, 42.5, 2.5);
+assert.equal(decimalInches.columns, 170);
+assert.equal(decimalInches.rows, 170);
+close(decimalInches.exactWidthIn, 425 / 25.4);
+assert.equal(decimalInches.recommendedWidthIn, 17, 'A 16.73-inch diamond area needs a 17-inch print file.');
+assert.equal(decimalInches.recommendedHeightIn, 17);
+
 const rounded = calculatePrintLayout(30, 40, 2.8, { roundingMode: 'floor', dpi: 150 });
 assert.equal(rounded.columns, 107);
 assert.equal(rounded.rows, 142);
