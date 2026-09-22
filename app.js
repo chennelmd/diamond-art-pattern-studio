@@ -97,7 +97,7 @@ async function importArtwork(file) {
     const frameNote = result.frameCount > 1 ? ` · Using page 1 of ${result.frameCount}` : '';
     const typeLabel = result.artworkType === 'illustration' ? 'Illustration detected' : 'Photo detected';
     document.querySelector('#sourceMeta').textContent = `${(result.fileSize / 1024 / 1024).toFixed(2)} MB · Validated and staged locally · ${typeLabel}${frameNote}`;
-    document.querySelector('#targetHeight').value = (12 / aspectRatio).toFixed(1);
+    document.querySelector('#targetHeight').value = (30 / aspectRatio).toFixed(1);
     imageAnalysis = analyzeImage(selectedImage);
     imageAnalysis.hasTransparency = result.hasTransparency;
     imageAnalysis.sourceWidth = result.width;
@@ -243,10 +243,10 @@ function updateRecommendation() {
     columns = imageAnalysis.shortestCells;
     rows = Math.ceil(columns / aspectRatio);
   }
-  const width = columns * pitch / 25.4;
-  const height = rows * pitch / 25.4;
+  const width = columns * pitch / 10;
+  const height = rows * pitch / 10;
   recommendedDimensions = { width, height };
-  document.querySelector('#recommendedSize').textContent = `${width.toFixed(1)} × ${height.toFixed(1)} in minimum`;
+  document.querySelector('#recommendedSize').textContent = `${width.toFixed(1)} × ${height.toFixed(1)} cm minimum`;
   const resolutionNote = imageAnalysis.resolutionLimited ? ' · limited by source resolution' : '';
   document.querySelector('#recommendationReason').textContent = `${imageAnalysis.level} · ${imageAnalysis.colorGroups} color groups · ${columns} × ${rows} cells${resolutionNote}`;
   document.querySelector('#useRecommendedSize').disabled = false;
@@ -263,17 +263,17 @@ function updateGridMath(changedField) {
   const height = Math.max(1, Number(heightInput.value) || 1);
   const [, pitchValue] = document.querySelector('#drillProfile').value.split(':');
   const pitch = Number(pitchValue);
-  const rounder = Math[document.querySelector('#roundingMode').value];
-  const columns = Math.max(1, rounder(width * 25.4 / pitch));
-  const rows = Math.max(1, rounder(height * 25.4 / pitch));
-  const actualWidth = columns * pitch / 25.4;
-  const actualHeight = rows * pitch / 25.4;
+  const layout = PatternGeometry.calculatePrintLayout(width, height, pitch, {
+    roundingMode: document.querySelector('#roundingMode').value,
+  });
+  const { columns, rows, exactWidthCm: actualWidth, exactHeightCm: actualHeight } = layout;
   const signed = value => `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
   document.querySelector('#gridDimensions').textContent = `${columns} × ${rows} cells`;
-  document.querySelector('#actualSize').textContent = `${actualWidth.toFixed(2)} × ${actualHeight.toFixed(2)} in`;
-  document.querySelector('#sizeDifference').textContent = `${signed(actualWidth - width)} × ${signed(actualHeight - height)} in`;
+  document.querySelector('#actualSize').textContent = `${actualWidth.toFixed(2)} × ${actualHeight.toFixed(2)} cm`;
+  document.querySelector('#sizeDifference').textContent = `${signed(actualWidth - width)} × ${signed(actualHeight - height)} cm`;
+  if (generatedPattern) document.querySelector('#preflightPanel').hidden = true;
   if (selectedImage) updateCropPreview();
-  return { columns, rows };
+  return layout;
 }
 
 function cleanPatternCells(sourceCells, columns, rows, strength) {
@@ -388,7 +388,8 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const vendorError = document.querySelector('#vendorError');
   vendorError.hidden = vendors.length > 0;
   if (!vendors.length) return;
-  const { columns, rows } = updateGridMath();
+  const printLayout = updateGridMath();
+  const { columns, rows } = printLayout;
   const [drillShape] = document.querySelector('#drillProfile').value.split(':');
   const sample = document.createElement('canvas');
   sample.width = columns;
@@ -473,7 +474,7 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const counts = consolidation.counts;
   const occupiedCells = cells.filter(color => color !== -1).length;
   const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
-  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
+  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, printLayout, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
   renderPattern();
   document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${flatColorCleanup.changedCells ? `<span>${flatColorCleanup.changedCells.toLocaleString()} flat-color cells cleaned</span>` : ''}${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
@@ -549,6 +550,143 @@ document.querySelector('#downloadPreview').addEventListener('click', () => {
   link.download = 'diamond-pattern-preview.png';
   link.href = document.querySelector('#patternCanvas').toDataURL('image/png');
   link.click();
+});
+
+function currentPrintLayout() {
+  if (!generatedPattern) return null;
+  const { requestedWidthCm, requestedHeightCm, pitchMm } = generatedPattern.printLayout;
+  try {
+    return PatternGeometry.calculatePrintLayout(requestedWidthCm, requestedHeightCm, pitchMm, {
+      roundingMode: document.querySelector('#roundingMode').value,
+      printWidthIn: Number(document.querySelector('#printWidth').value),
+      printHeightIn: Number(document.querySelector('#printHeight').value),
+      dpi: Number(document.querySelector('#exportDpi').value),
+    });
+  } catch (_error) {
+    return null;
+  }
+}
+
+function updatePreflight() {
+  if (!generatedPattern) return;
+  const layout = currentPrintLayout();
+  if (!layout) {
+    const error = document.querySelector('#printError');
+    error.hidden = false;
+    error.textContent = 'Enter positive print dimensions and an export resolution.';
+    document.querySelector('#downloadPrint').disabled = true;
+    document.querySelector('#scalingStatus').textContent = '⚠ CHECK PRINT SETTINGS';
+    document.querySelector('#scalingStatus').classList.add('invalid');
+    return;
+  }
+  document.querySelector('#diamondAreaSummary').textContent = `${layout.exactWidthCm.toFixed(2)} × ${layout.exactHeightCm.toFixed(2)} cm`;
+  document.querySelector('#diamondInchesSummary').textContent = `${layout.exactWidthMm.toFixed(1)} × ${layout.exactHeightMm.toFixed(1)} mm · ${layout.exactWidthIn.toFixed(3)} × ${layout.exactHeightIn.toFixed(3)} in`;
+  document.querySelector('#drillGridSummary').textContent = `${layout.columns} × ${layout.rows} drills`;
+  document.querySelector('#pitchSummary').textContent = `${layout.pitchMm.toFixed(1)} mm pitch`;
+  document.querySelector('#printFileSummary').textContent = `${layout.printWidthIn} × ${layout.printHeightIn} in · ${layout.dpi} DPI`;
+  document.querySelector('#pixelSummary').textContent = `${layout.canvasWidthPx.toLocaleString()} × ${layout.canvasHeightPx.toLocaleString()} px`;
+  document.querySelector('#marginSummary').textContent = `${Math.max(0, layout.marginXIn).toFixed(4)} in horizontal · ${Math.max(0, layout.marginYIn).toFixed(4)} in vertical`;
+  const error = document.querySelector('#printError');
+  error.hidden = layout.compatible;
+  error.textContent = layout.compatible ? '' : `Print size is too small. Use at least ${layout.recommendedWidthIn} × ${layout.recommendedHeightIn} inches.`;
+  document.querySelector('#downloadPrint').disabled = !layout.compatible;
+  const status = document.querySelector('#scalingStatus');
+  status.textContent = layout.compatible ? '✓ GRID SCALING LOCKED · 100%' : '⚠ PRINT AREA TOO SMALL';
+  status.classList.toggle('invalid', !layout.compatible);
+}
+
+document.querySelector('#openPreflight').addEventListener('click', () => {
+  const layout = generatedPattern.printLayout;
+  document.querySelector('#printWidth').value = layout.recommendedWidthIn;
+  document.querySelector('#printHeight').value = layout.recommendedHeightIn;
+  const panel = document.querySelector('#preflightPanel');
+  panel.hidden = false;
+  updatePreflight();
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+document.querySelectorAll('#printWidth, #printHeight, #exportDpi').forEach(control => control.addEventListener('input', updatePreflight));
+document.querySelector('#useRecommendedPrint').addEventListener('click', () => {
+  const layout = generatedPattern.printLayout;
+  document.querySelector('#printWidth').value = layout.recommendedWidthIn;
+  document.querySelector('#printHeight').value = layout.recommendedHeightIn;
+  updatePreflight();
+});
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+async function pngWithDpi(blob, dpi) {
+  const png = new Uint8Array(await blob.arrayBuffer());
+  const pixelsPerMeter = Math.round(dpi / 0.0254);
+  const chunk = new Uint8Array(21);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, 9);
+  chunk.set([112, 72, 89, 115], 4);
+  view.setUint32(8, pixelsPerMeter);
+  view.setUint32(12, pixelsPerMeter);
+  chunk[16] = 1;
+  view.setUint32(17, crc32(chunk.slice(4, 17)));
+  const output = new Uint8Array(png.length + chunk.length);
+  output.set(png.slice(0, 33), 0);
+  output.set(chunk, 33);
+  output.set(png.slice(33), 54);
+  return new Blob([output], { type: 'image/png' });
+}
+
+document.querySelector('#downloadPrint').addEventListener('click', async () => {
+  const layout = currentPrintLayout();
+  if (!layout?.compatible) return;
+  const button = document.querySelector('#downloadPrint');
+  button.disabled = true;
+  button.textContent = 'Preparing print file…';
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  try {
+    const output = document.createElement('canvas');
+    output.width = layout.canvasWidthPx;
+    output.height = layout.canvasHeightPx;
+    const context = output.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, output.width, output.height);
+    const offsetX = Math.round((output.width - layout.activeWidthPx) / 2);
+    const offsetY = Math.round((output.height - layout.activeHeightPx) / 2);
+    const { columns, rows, palette, cells, drillShape } = generatedPattern;
+    cells.forEach((paletteIndex, index) => {
+      if (paletteIndex === -1) return;
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x1 = offsetX + Math.round(column * layout.activeWidthPx / columns);
+      const x2 = offsetX + Math.round((column + 1) * layout.activeWidthPx / columns);
+      const y1 = offsetY + Math.round(row * layout.activeHeightPx / rows);
+      const y2 = offsetY + Math.round((row + 1) * layout.activeHeightPx / rows);
+      context.fillStyle = `rgb(${palette[paletteIndex].join(',')})`;
+      if (drillShape === 'round') {
+        context.beginPath();
+        context.ellipse((x1 + x2) / 2, (y1 + y2) / 2, (x2 - x1) * .44, (y2 - y1) * .44, 0, 0, Math.PI * 2);
+        context.fill();
+      } else context.fillRect(x1, y1, x2 - x1, y2 - y1);
+    });
+    const blob = await new Promise(resolve => output.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('The browser could not create the requested print file.');
+    const exactScaleBlob = await pngWithDpi(blob, layout.dpi);
+    const link = document.createElement('a');
+    link.download = `diamond-pattern-${layout.printWidthIn}x${layout.printHeightIn}in-${layout.dpi}dpi.png`;
+    link.href = URL.createObjectURL(exactScaleBlob);
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  } catch (error) {
+    const message = document.querySelector('#printError');
+    message.hidden = false;
+    message.textContent = `Export failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'Download exact-scale PNG <span>↓</span>';
+  }
 });
 
 document.querySelectorAll('.project-card').forEach(card => card.addEventListener('click', () => {

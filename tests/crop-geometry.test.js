@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { calculateCropRegion } = require('../geometry.js');
+const { calculateCropRegion, calculatePrintLayout } = require('../geometry.js');
 
 function close(actual, expected) {
   assert.ok(Math.abs(actual - expected) < 0.0001, `${actual} should equal ${expected}`);
@@ -21,5 +21,27 @@ close(zoomed.width, 500);
 close(zoomed.height, 500);
 close(zoomed.x, 250);
 close(zoomed.y, 250);
+
+const printLayout = calculatePrintLayout(30, 40, 2.5, { dpi: 300 });
+assert.equal(printLayout.columns, 120);
+assert.equal(printLayout.rows, 160);
+close(printLayout.exactWidthIn, 300 / 25.4);
+close(printLayout.exactHeightIn, 400 / 25.4);
+assert.equal(printLayout.recommendedWidthIn, 12);
+assert.equal(printLayout.recommendedHeightIn, 16);
+assert.equal(printLayout.canvasWidthPx, 3600);
+assert.equal(printLayout.canvasHeightPx, 4800);
+assert.equal(printLayout.compatible, true);
+close(printLayout.marginXIn, (12 - 300 / 25.4) / 2);
+
+const incompatible = calculatePrintLayout(30, 40, 2.5, { printWidthIn: 11, printHeightIn: 16 });
+assert.equal(incompatible.compatible, false);
+assert.ok(incompatible.marginXIn < 0);
+
+const rounded = calculatePrintLayout(30, 40, 2.8, { roundingMode: 'floor', dpi: 150 });
+assert.equal(rounded.columns, 107);
+assert.equal(rounded.rows, 142);
+assert.equal(rounded.activeWidthPx, Math.round(107 * 2.8 / 25.4 * 150));
+assert.throws(() => calculatePrintLayout(30, 40, 0), /positive/);
 
 console.log('crop geometry tests passed');

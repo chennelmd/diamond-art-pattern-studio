@@ -19,6 +19,58 @@
     return { x, y, width, height };
   }
 
-  root.PatternGeometry = { calculateCropRegion };
+  function calculatePrintLayout(widthCm, heightCm, pitchMm, options = {}) {
+    if (![widthCm, heightCm, pitchMm].every(value => Number.isFinite(value) && value > 0)) {
+      throw new TypeError('Pattern dimensions and drill pitch must be positive numbers.');
+    }
+    const roundingMode = options.roundingMode || 'round';
+    if (!['round', 'floor', 'ceil'].includes(roundingMode)) throw new TypeError('Unsupported cell rounding mode.');
+    const dpi = options.dpi === undefined ? 300 : Number(options.dpi);
+    if (!Number.isFinite(dpi) || dpi <= 0) throw new TypeError('Export DPI must be a positive number.');
+
+    const roundCells = Math[roundingMode];
+    const columns = Math.max(1, roundCells(widthCm * 10 / pitchMm));
+    const rows = Math.max(1, roundCells(heightCm * 10 / pitchMm));
+    const exactWidthMm = columns * pitchMm;
+    const exactHeightMm = rows * pitchMm;
+    const exactWidthIn = exactWidthMm / 25.4;
+    const exactHeightIn = exactHeightMm / 25.4;
+    const recommendedWidthIn = Math.ceil(exactWidthIn);
+    const recommendedHeightIn = Math.ceil(exactHeightIn);
+    const printWidthIn = options.printWidthIn === undefined ? recommendedWidthIn : Number(options.printWidthIn);
+    const printHeightIn = options.printHeightIn === undefined ? recommendedHeightIn : Number(options.printHeightIn);
+    if (![printWidthIn, printHeightIn].every(value => Number.isFinite(value) && value > 0)) {
+      throw new TypeError('Professional print dimensions must be positive numbers.');
+    }
+    const marginXIn = (printWidthIn - exactWidthIn) / 2;
+    const marginYIn = (printHeightIn - exactHeightIn) / 2;
+    return {
+      requestedWidthCm: widthCm,
+      requestedHeightCm: heightCm,
+      columns,
+      rows,
+      pitchMm,
+      exactWidthMm,
+      exactHeightMm,
+      exactWidthCm: exactWidthMm / 10,
+      exactHeightCm: exactHeightMm / 10,
+      exactWidthIn,
+      exactHeightIn,
+      recommendedWidthIn,
+      recommendedHeightIn,
+      printWidthIn,
+      printHeightIn,
+      marginXIn,
+      marginYIn,
+      dpi,
+      canvasWidthPx: Math.round(printWidthIn * dpi),
+      canvasHeightPx: Math.round(printHeightIn * dpi),
+      activeWidthPx: Math.round(exactWidthIn * dpi),
+      activeHeightPx: Math.round(exactHeightIn * dpi),
+      compatible: marginXIn >= 0 && marginYIn >= 0,
+    };
+  }
+
+  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternGeometry;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

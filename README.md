@@ -30,6 +30,7 @@ Then open `http://localhost:4173`.
 - Import and setup workspace with image metadata, aspect-ratio locking, drill profiles, multi-vendor selection, and exact whole-cell grid calculations
 - Color-reduced, true-proportion drill-grid preview with zoom, grid inspection, palette counts, and PNG download
 - Shape-accurate round and square drill rendering with explained whole-cell rounding choices
+- Exact-scale professional print preflight with centimeter-based sizing, whole-inch canvas recommendations, centered margins, DPI metadata, undersized-canvas protection, and PNG export
 - Artwork-based minimum-size recommendations using measured edge detail, color variety, aspect ratio, resolution, and drill pitch
 - Non-destructive crop positioning and configurable transparent-PNG background flattening
 - Conversion-stage confetti cleanup that is completed before manual pattern editing
