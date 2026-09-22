@@ -71,6 +71,24 @@
     };
   }
 
-  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout };
+  function calculateSizeTiers(shortestCells, aspectRatio, pitchMm, stepCells = 20) {
+    if (![shortestCells, aspectRatio, pitchMm, stepCells].every(value => Number.isFinite(value) && value > 0)) {
+      throw new TypeError('Size-tier inputs must be positive numbers.');
+    }
+    const baseCells = Math.max(stepCells, Math.round(shortestCells));
+    return [-1, 0, 1].map(offset => {
+      const shortSide = Math.max(stepCells, baseCells + offset * stepCells);
+      const columns = aspectRatio >= 1 ? Math.ceil(shortSide * aspectRatio) : shortSide;
+      const rows = aspectRatio >= 1 ? shortSide : Math.ceil(shortSide / aspectRatio);
+      return {
+        columns,
+        rows,
+        widthCm: columns * pitchMm / 10,
+        heightCm: rows * pitchMm / 10,
+      };
+    });
+  }
+
+  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout, calculateSizeTiers };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternGeometry;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -63,6 +63,8 @@ let aspectRatio = 3 / 4;
 let generatedPattern = null;
 let imageAnalysis = null;
 let recommendedDimensions = null;
+let recommendationTiers = [];
+let recommendationTierIndex = 1;
 let backgroundSelection = null;
 let selectingBackground = false;
 
@@ -77,6 +79,7 @@ async function importArtwork(file) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || 'The artwork could not be imported.');
     sourceAsset = result;
+    recommendationTierIndex = 1;
     backgroundSelection = null;
     selectingBackground = false;
     document.querySelector('#sourceFrame').classList.remove('background-pick-active');
@@ -234,24 +237,20 @@ function updateRecommendation() {
   if (!imageAnalysis || !selectedImage) return;
   const [, pitchValue] = document.querySelector('#drillProfile').value.split(':');
   const pitch = Number(pitchValue);
-  let columns;
-  let rows;
-  if (aspectRatio >= 1) {
-    rows = imageAnalysis.shortestCells;
-    columns = Math.ceil(rows * aspectRatio);
-  } else {
-    columns = imageAnalysis.shortestCells;
-    rows = Math.ceil(columns / aspectRatio);
-  }
-  const width = columns * pitch / 10;
-  const height = rows * pitch / 10;
+  recommendationTiers = PatternGeometry.calculateSizeTiers(imageAnalysis.shortestCells, aspectRatio, pitch);
+  const selectedTier = recommendationTiers[recommendationTierIndex];
+  const { columns, rows, widthCm: width, heightCm: height } = selectedTier;
   recommendedDimensions = { width, height };
   const printWidth = Math.ceil(width / 2.54);
   const printHeight = Math.ceil(height / 2.54);
-  document.querySelector('#recommendedSize').textContent = `${width.toFixed(1)} × ${height.toFixed(1)} cm minimum`;
+  const tierLabels = ['SMALLER GRID', 'RECOMMENDED GRID', 'LARGER GRID'];
+  document.querySelector('#recommendationLabel').textContent = tierLabels[recommendationTierIndex];
+  document.querySelector('#recommendedSize').textContent = `${width.toFixed(1)} × ${height.toFixed(1)} cm · ${columns} × ${rows} drills`;
   const resolutionNote = imageAnalysis.resolutionLimited ? ' · limited by source resolution' : '';
   document.querySelector('#recommendationReason').textContent = `${imageAnalysis.level} · ${columns} × ${rows} cells · fits a ${printWidth} × ${printHeight} in print file${resolutionNote}`;
   document.querySelector('#useRecommendedSize').disabled = false;
+  document.querySelector('#smallerRecommendedSize').disabled = recommendationTierIndex === 0;
+  document.querySelector('#largerRecommendedSize').disabled = recommendationTierIndex === recommendationTiers.length - 1;
 }
 
 function updateGridMath(changedField) {
@@ -330,12 +329,23 @@ continueBtn.addEventListener('click', async (event) => {
 document.querySelectorAll('#targetWidth, #targetHeight').forEach(field => field.addEventListener('input', () => updateGridMath(field)));
 document.querySelectorAll('#drillProfile, #roundingMode, #lockRatio').forEach(field => field.addEventListener('change', () => updateGridMath()));
 document.querySelector('#drillProfile').addEventListener('change', updateRecommendation);
-document.querySelector('#useRecommendedSize').addEventListener('click', () => {
+function applyRecommendedSize() {
   if (!recommendedDimensions) return;
   document.querySelector('#targetWidth').value = recommendedDimensions.width.toFixed(1);
   document.querySelector('#targetHeight').value = recommendedDimensions.height.toFixed(1);
   updateGridMath();
+}
+document.querySelector('#smallerRecommendedSize').addEventListener('click', () => {
+  recommendationTierIndex = Math.max(0, recommendationTierIndex - 1);
+  updateRecommendation();
+  applyRecommendedSize();
 });
+document.querySelector('#largerRecommendedSize').addEventListener('click', () => {
+  recommendationTierIndex = Math.min(recommendationTiers.length - 1, recommendationTierIndex + 1);
+  updateRecommendation();
+  applyRecommendedSize();
+});
+document.querySelector('#useRecommendedSize').addEventListener('click', applyRecommendedSize);
 document.querySelectorAll('#cropZoom, #cropX, #cropY').forEach(control => control.addEventListener('input', updateCropPreview));
 document.querySelector('#backgroundColor').addEventListener('input', () => {
   updateCropPreview();

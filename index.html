@@ -54,7 +54,7 @@
             </article>
             <aside class="settings-panel">
               <div class="panel-title"><div><h2>Pattern dimensions</h2><p>Physical dimensions resolve to whole drill cells.</p></div></div>
-              <div id="sizeRecommendation" class="recommendation-card" aria-live="polite"><div><span class="recommendation-icon">✦</span><div><small>ANALYZING ARTWORK</small><strong id="recommendedSize">Preparing recommendation…</strong><p id="recommendationReason">Checking detail, edges, color variety, and source resolution.</p></div></div><button id="useRecommendedSize" type="button" disabled>Use size</button></div>
+              <div id="sizeRecommendation" class="recommendation-card" aria-live="polite"><div><span class="recommendation-icon">✦</span><div><small id="recommendationLabel">ANALYZING ARTWORK</small><strong id="recommendedSize">Preparing recommendation…</strong><p id="recommendationReason">Checking detail, edges, color variety, and source resolution.</p></div></div><div class="recommendation-actions"><button id="smallerRecommendedSize" type="button" disabled>− Smaller</button><button id="useRecommendedSize" type="button" disabled>Use size</button><button id="largerRecommendedSize" type="button" disabled>+ Larger</button></div></div>
               <label>Drill profile<select id="drillProfile"><option value="round:2.5">Round drill · 2.5 mm pitch</option><option value="square:2.5">Square drill · 2.5 mm pitch</option><option value="round:2.8">Large round · 2.8 mm pitch</option></select></label>
               <div class="field-row"><label>Diamond width<div class="input-unit"><input id="targetWidth" type="number" min="1" step="0.1" value="30" /><span>cm</span></div></label><label>Diamond height<div class="input-unit"><input id="targetHeight" type="number" min="1" step="0.1" value="40" /><span>cm</span></div></label></div>
               <label>Cell rounding<select id="roundingMode"><option value="round">Nearest whole cell — recommended</option><option value="floor">Round down — do not exceed size</option><option value="ceil">Round up — meet minimum size</option></select><small id="roundingHelp" class="field-help">Uses the closest whole number of drills, so the finished size changes as little as possible.</small></label>
@@ -137,9 +137,9 @@
         <button id="continueBtn" class="primary-btn" value="default" disabled>Continue to setup <span>→</span></button>
       </form>
     </dialog>
-    <script src="geometry.js?v=20260923"></script>
-    <script src="dmc-colors.js?v=20260923"></script>
-    <script src="conversion.js?v=20260923"></script>
-    <script src="app.js?v=20260923"></script>
+    <script src="geometry.js?v=20260924"></script>
+    <script src="dmc-colors.js?v=20260924"></script>
+    <script src="conversion.js?v=20260924"></script>
+    <script src="app.js?v=20260924"></script>
   </body>
 </html>
