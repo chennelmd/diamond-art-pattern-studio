@@ -108,7 +108,7 @@ async function importArtwork(file) {
     document.querySelector('#transparencyOptions').hidden = !result.hasTransparency;
     if (result.hasTransparency) document.querySelector('#sourceMeta').textContent += ' · Transparency detected';
     updateRecommendation();
-    updateGridMath();
+    applyRecommendedSize();
     status.textContent = `✓ ${result.fileName} imported`;
     continueBtn.disabled = false;
     document.querySelector('#dashboardView').hidden = true;
@@ -243,14 +243,14 @@ function updateRecommendation() {
   recommendedDimensions = { width, height };
   const printWidth = Math.ceil(width / 2.54);
   const printHeight = Math.ceil(height / 2.54);
-  const tierLabels = ['SMALLER GRID', 'RECOMMENDED GRID', 'LARGER GRID'];
-  document.querySelector('#recommendationLabel').textContent = tierLabels[recommendationTierIndex];
-  document.querySelector('#recommendedSize').textContent = `${width.toFixed(1)} × ${height.toFixed(1)} cm · ${columns} × ${rows} drills`;
+  const tierLabels = ['Smaller', 'Recommended', 'Larger'];
+  const sizeTier = document.querySelector('#sizeTier');
+  sizeTier.innerHTML = recommendationTiers.map((tier, index) => `<option value="${index}">${tierLabels[index]} — ${tier.widthCm.toFixed(1)} × ${tier.heightCm.toFixed(1)} cm (${tier.columns} × ${tier.rows} drills)</option>`).join('');
+  sizeTier.value = String(recommendationTierIndex);
+  sizeTier.disabled = false;
+  document.querySelector('#recommendedSize').textContent = `Selected: ${width.toFixed(1)} × ${height.toFixed(1)} cm`;
   const resolutionNote = imageAnalysis.resolutionLimited ? ' · limited by source resolution' : '';
-  document.querySelector('#recommendationReason').textContent = `${imageAnalysis.level} · ${columns} × ${rows} cells · fits a ${printWidth} × ${printHeight} in print file${resolutionNote}`;
-  document.querySelector('#useRecommendedSize').disabled = false;
-  document.querySelector('#smallerRecommendedSize').disabled = recommendationTierIndex === 0;
-  document.querySelector('#largerRecommendedSize').disabled = recommendationTierIndex === recommendationTiers.length - 1;
+  document.querySelector('#recommendationReason').textContent = `${tierLabels[recommendationTierIndex]} detail · ${columns} × ${rows} drills · fits a ${printWidth} × ${printHeight} in print file${resolutionNote}`;
 }
 
 function updateGridMath(changedField) {
@@ -328,24 +328,21 @@ continueBtn.addEventListener('click', async (event) => {
 
 document.querySelectorAll('#targetWidth, #targetHeight').forEach(field => field.addEventListener('input', () => updateGridMath(field)));
 document.querySelectorAll('#drillProfile, #roundingMode, #lockRatio').forEach(field => field.addEventListener('change', () => updateGridMath()));
-document.querySelector('#drillProfile').addEventListener('change', updateRecommendation);
+document.querySelector('#drillProfile').addEventListener('change', () => {
+  updateRecommendation();
+  applyRecommendedSize();
+});
 function applyRecommendedSize() {
   if (!recommendedDimensions) return;
   document.querySelector('#targetWidth').value = recommendedDimensions.width.toFixed(1);
   document.querySelector('#targetHeight').value = recommendedDimensions.height.toFixed(1);
   updateGridMath();
 }
-document.querySelector('#smallerRecommendedSize').addEventListener('click', () => {
-  recommendationTierIndex = Math.max(0, recommendationTierIndex - 1);
+document.querySelector('#sizeTier').addEventListener('change', event => {
+  recommendationTierIndex = Number(event.target.value);
   updateRecommendation();
   applyRecommendedSize();
 });
-document.querySelector('#largerRecommendedSize').addEventListener('click', () => {
-  recommendationTierIndex = Math.min(recommendationTiers.length - 1, recommendationTierIndex + 1);
-  updateRecommendation();
-  applyRecommendedSize();
-});
-document.querySelector('#useRecommendedSize').addEventListener('click', applyRecommendedSize);
 document.querySelectorAll('#cropZoom, #cropX, #cropY').forEach(control => control.addEventListener('input', updateCropPreview));
 document.querySelector('#backgroundColor').addEventListener('input', () => {
   updateCropPreview();

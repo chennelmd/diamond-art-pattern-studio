@@ -46,6 +46,16 @@ python server.py
 
 Then open `http://localhost:4173`.
 
+## Choosing a pattern size
+
+After importing artwork, use the **Choose pattern size** menu in the artwork size guide:
+
+- **Smaller** uses 20 fewer drills on the artwork's shorter side.
+- **Recommended** uses the detail-based grid suggested by the artwork analysis.
+- **Larger** uses 20 more drills on the shorter side for additional detail.
+
+Choosing an option immediately updates the Width and Height fields. You can still type a custom size into those fields afterward. The physical sizes change when the drill pitch changes: round and square 2.5 mm drills use the same physical grid size, while the 2.8 mm profile produces a larger painting from the same drill count.
+
 ## Current prototype
 
 - Responsive project dashboard with recent-project status and production metrics
