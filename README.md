@@ -6,11 +6,40 @@ Product requirements, including professional-print sizing and exact grid-scaling
 
 ## Run locally
 
-Python 3.10+ is required. Create an environment and install the local image-processing dependencies:
+Python 3.10+ is required. Create an environment and install the local image-processing dependencies.
+
+### macOS and Linux
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python server.py
+```
+
+### Windows Command Prompt (`cmd.exe`)
+
+Windows normally exposes Python as `python` or `py`, not `python3`. The commands below call the virtual environment's interpreter directly, so activation is not required:
+
+```bat
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe server.py
+```
+
+If `python` is not recognized, replace it in the first command with `py`:
+
+```bat
+py -m venv .venv
+```
+
+To activate the environment in Command Prompt instead, run `.venv\Scripts\activate.bat`. The Unix command `source .venv/bin/activate` does not work in Command Prompt.
+
+### Windows PowerShell
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python server.py
 ```
