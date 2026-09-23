@@ -68,6 +68,21 @@ let recommendationTierIndex = 1;
 let backgroundSelection = null;
 let selectingBackground = false;
 
+function resolvedSamplingMode() {
+  const choice = document.querySelector('#artworkSampling').value;
+  if (choice !== 'automatic') return choice;
+  return sourceAsset?.artworkType === 'illustration' ? 'crisp' : 'smooth';
+}
+
+function updateSamplingHelp() {
+  const choice = document.querySelector('#artworkSampling').value;
+  const detected = sourceAsset?.artworkType === 'illustration' ? 'crisp' : 'smooth';
+  const applied = choice === 'automatic' ? detected : choice;
+  document.querySelector('#samplingHelp').textContent = choice === 'automatic'
+    ? `Automatic detected ${detected} artwork and will use ${applied} sampling. Override this if the preview does not match the source.`
+    : `${applied === 'smooth' ? 'Smooth sampling blends source pixels while resizing.' : 'Crisp sampling keeps hard pixel edges while resizing.'} Regenerate the pattern to apply this choice.`;
+}
+
 async function importArtwork(file) {
   const status = document.querySelector('#fileName');
   continueBtn.disabled = true;
@@ -107,6 +122,7 @@ async function importArtwork(file) {
     imageAnalysis.sourceHeight = result.height;
     document.querySelector('#transparencyOptions').hidden = !result.hasTransparency;
     if (result.hasTransparency) document.querySelector('#sourceMeta').textContent += ' · Transparency detected';
+    updateSamplingHelp();
     updateRecommendation();
     applyRecommendedSize();
     status.textContent = `✓ ${result.fileName} imported`;
@@ -369,6 +385,10 @@ document.querySelector('#backgroundTolerance').addEventListener('input', event =
   document.querySelector('#backgroundToleranceValue').textContent = event.target.value;
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
 });
+document.querySelector('#artworkSampling').addEventListener('change', () => {
+  updateSamplingHelp();
+  if (generatedPattern) document.querySelector('#patternResult').hidden = true;
+});
 document.querySelectorAll('#backgroundShadeCount, #backgroundDarkColor, #backgroundLightColor, #solidBackgroundColor, #solidBackgroundStyle').forEach(control => control.addEventListener('input', () => {
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
 }));
@@ -407,7 +427,8 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   sample.width = columns;
   sample.height = rows;
   const sampleContext = sample.getContext('2d');
-  const illustrationMode = sourceAsset?.artworkType === 'illustration';
+  const samplingMode = resolvedSamplingMode();
+  const illustrationMode = samplingMode === 'crisp';
   sampleContext.imageSmoothingEnabled = !illustrationMode;
   if (!illustrationMode) sampleContext.imageSmoothingQuality = 'high';
   const transparencyMode = document.querySelector('input[name="transparencyMode"]:checked').value;
@@ -486,7 +507,7 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const counts = consolidation.counts;
   const occupiedCells = cells.filter(color => color !== -1).length;
   const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
-  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, printLayout, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
+  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, printLayout, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', samplingMode, backgroundMode, treatedBackgroundCells };
   renderPattern();
   document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${flatColorCleanup.changedCells ? `<span>${flatColorCleanup.changedCells.toLocaleString()} flat-color cells cleaned</span>` : ''}${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
