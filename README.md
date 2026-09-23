@@ -65,6 +65,7 @@ Choosing an option immediately updates the Width and Height fields. You can stil
 - Clear errors for corrupted, unsupported, oversized, or undecodable artwork
 - Automatic photo/illustration detection with resampling chosen for smooth photographs or crisp graphic artwork
 - A manual artwork-sampling override for resaved images that automatic detection classifies differently from the original
+  - Find **Artwork sampling** in the highlighted **Preview appearance** card at the top of the right-hand Pattern dimensions panel.
 - Deterministic adaptive color reduction mapped to the standard 447-color DMC drill reference with visible codes and drill counts
 - Connected click-and-tolerance background selection with preserve, automatic/manual 3–5 shade simplification, and solid-color replacement
 - Import and setup workspace with image metadata, aspect-ratio locking, drill profiles, multi-vendor selection, and exact whole-cell grid calculations
