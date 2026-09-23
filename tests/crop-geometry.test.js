@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { calculateCropRegion, calculatePrintLayout, calculateSizeTiers } = require('../geometry.js');
+const { calculateCropRegion, calculateLabelInterval, calculatePrintLayout, calculateSizeTiers } = require('../geometry.js');
 
 function close(actual, expected) {
   assert.ok(Math.abs(actual - expected) < 0.0001, `${actual} should equal ${expected}`);
@@ -61,5 +61,10 @@ assert.deepEqual(largeDrillTiers.map(tier => Number(tier.widthCm.toFixed(1))), [
 const portraitTiers = calculateSizeTiers(100, 3 / 4, 2.5);
 assert.deepEqual(portraitTiers.map(tier => [tier.columns, tier.rows]), [[80, 107], [100, 134], [120, 160]]);
 assert.throws(() => calculateSizeTiers(170, 1, 0), /positive/);
+
+assert.equal(calculateLabelInterval(4), 10);
+assert.equal(calculateLabelInterval(12), 2);
+assert.equal(calculateLabelInterval(30), 1);
+assert.throws(() => calculateLabelInterval(0), /positive/);
 
 console.log('crop geometry tests passed');

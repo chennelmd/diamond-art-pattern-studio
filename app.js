@@ -514,25 +514,47 @@ document.querySelectorAll('#maxColors, #cleanupStrength').forEach(control => con
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
 }));
 
+function drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize = 8 }) {
+  const columnInterval = PatternGeometry.calculateLabelInterval(cellWidth, fontSize * 2.4);
+  const rowInterval = PatternGeometry.calculateLabelInterval(cellHeight, fontSize * 1.7);
+  context.save();
+  context.fillStyle = '#51475d';
+  context.font = `700 ${fontSize}px "DM Sans", sans-serif`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  for (let column = 0; column < columns; column += columnInterval) {
+    context.fillText(String(column + 1), offsetX + (column + .5) * cellWidth, offsetY - fontSize * .75);
+  }
+  context.textAlign = 'right';
+  for (let row = 0; row < rows; row += rowInterval) {
+    context.fillText(String(row + 1), offsetX - fontSize * .65, offsetY + (row + .5) * cellHeight);
+  }
+  context.restore();
+}
+
 function renderPattern() {
   if (!generatedPattern) return;
   const { columns, rows, palette, cells, drillShape, transparencyMode } = generatedPattern;
   const cellSize = Number(document.querySelector('#previewZoom').value);
+  const labelGutter = 30;
   const showGrid = document.querySelector('#showGrid').checked && cellSize >= 4;
   const output = document.querySelector('#patternCanvas');
-  output.width = columns * cellSize;
-  output.height = rows * cellSize;
+  output.width = columns * cellSize + labelGutter;
+  output.height = rows * cellSize + labelGutter;
   const context = output.getContext('2d');
   context.clearRect(0, 0, output.width, output.height);
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, output.width, labelGutter);
+  context.fillRect(0, labelGutter, labelGutter, output.height - labelGutter);
   if (transparencyMode === 'fill') {
     context.fillStyle = drillShape === 'round' ? '#eeeaf0' : '#ffffff';
-    context.fillRect(0, 0, output.width, output.height);
+    context.fillRect(labelGutter, labelGutter, columns * cellSize, rows * cellSize);
   }
   cells.forEach((paletteIndex, index) => {
     if (paletteIndex === -1) return;
     const color = palette[paletteIndex];
-    const x = (index % columns) * cellSize;
-    const y = Math.floor(index / columns) * cellSize;
+    const x = labelGutter + (index % columns) * cellSize;
+    const y = labelGutter + Math.floor(index / columns) * cellSize;
     context.fillStyle = `rgb(${color.join(',')})`;
     if (drillShape === 'round') {
       context.beginPath();
@@ -552,6 +574,10 @@ function renderPattern() {
       context.strokeRect(x + .5, y + .5, cellSize - 1, cellSize - 1);
     }
   });
+  context.strokeStyle = '#766b80';
+  context.lineWidth = 1;
+  context.strokeRect(labelGutter + .5, labelGutter + .5, columns * cellSize - 1, rows * cellSize - 1);
+  drawGridCoordinates(context, { columns, rows, cellWidth: cellSize, cellHeight: cellSize, offsetX: labelGutter, offsetY: labelGutter });
 }
 
 document.querySelector('#previewZoom').addEventListener('input', renderPattern);
@@ -683,6 +709,13 @@ document.querySelector('#downloadPrint').addEventListener('click', async () => {
         context.fill();
       } else context.fillRect(x1, y1, x2 - x1, y2 - y1);
     });
+    const cellWidth = layout.activeWidthPx / columns;
+    const cellHeight = layout.activeHeightPx / rows;
+    const coordinateFontSize = Math.max(6, Math.min(10, offsetX / 3, offsetY * .45));
+    context.strokeStyle = '#51475d';
+    context.lineWidth = Math.max(1, layout.dpi / 300);
+    context.strokeRect(offsetX, offsetY, layout.activeWidthPx, layout.activeHeightPx);
+    drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize: coordinateFontSize });
     const blob = await new Promise(resolve => output.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('The browser could not create the requested print file.');
     const exactScaleBlob = await pngWithDpi(blob, layout.dpi);

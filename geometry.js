@@ -35,8 +35,10 @@
     const exactHeightMm = rows * pitchMm;
     const exactWidthIn = exactWidthMm / 25.4;
     const exactHeightIn = exactHeightMm / 25.4;
-    const recommendedWidthIn = Math.ceil(exactWidthIn);
-    const recommendedHeightIn = Math.ceil(exactHeightIn);
+    const labelGutterIn = options.labelGutterIn === undefined ? 0.08 : Number(options.labelGutterIn);
+    if (!Number.isFinite(labelGutterIn) || labelGutterIn < 0) throw new TypeError('Label gutter must not be negative.');
+    const recommendedWidthIn = Math.ceil(exactWidthIn + labelGutterIn * 2);
+    const recommendedHeightIn = Math.ceil(exactHeightIn + labelGutterIn * 2);
     const printWidthIn = options.printWidthIn === undefined ? recommendedWidthIn : Number(options.printWidthIn);
     const printHeightIn = options.printHeightIn === undefined ? recommendedHeightIn : Number(options.printHeightIn);
     if (![printWidthIn, printHeightIn].every(value => Number.isFinite(value) && value > 0)) {
@@ -62,12 +64,13 @@
       printHeightIn,
       marginXIn,
       marginYIn,
+      labelGutterIn,
       dpi,
       canvasWidthPx: Math.round(printWidthIn * dpi),
       canvasHeightPx: Math.round(printHeightIn * dpi),
       activeWidthPx: Math.round(exactWidthIn * dpi),
       activeHeightPx: Math.round(exactHeightIn * dpi),
-      compatible: marginXIn >= 0 && marginYIn >= 0,
+      compatible: marginXIn >= labelGutterIn && marginYIn >= labelGutterIn,
     };
   }
 
@@ -89,6 +92,15 @@
     });
   }
 
-  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout, calculateSizeTiers };
+  function calculateLabelInterval(cellSize, minimumSpacing = 24) {
+    if (![cellSize, minimumSpacing].every(value => Number.isFinite(value) && value > 0)) {
+      throw new TypeError('Label spacing inputs must be positive numbers.');
+    }
+    const minimumInterval = Math.ceil(minimumSpacing / cellSize);
+    const magnitude = 10 ** Math.floor(Math.log10(minimumInterval));
+    return [1, 2, 5, 10].map(multiplier => multiplier * magnitude).find(value => value >= minimumInterval) || magnitude * 10;
+  }
+
+  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout, calculateSizeTiers, calculateLabelInterval };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternGeometry;
 })(typeof globalThis !== 'undefined' ? globalThis : window);
