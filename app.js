@@ -514,20 +514,24 @@ document.querySelectorAll('#maxColors, #cleanupStrength').forEach(control => con
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
 }));
 
-function drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize = 8 }) {
+function drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize = 8, columnPrefix = '', rowPrefix = '', showTicks = false }) {
   const columnInterval = PatternGeometry.calculateLabelInterval(cellWidth, fontSize * 2.4);
   const rowInterval = PatternGeometry.calculateLabelInterval(cellHeight, fontSize * 1.7);
   context.save();
-  context.fillStyle = '#51475d';
+  context.fillStyle = '#33254a';
   context.font = `700 ${fontSize}px "DM Sans", sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   for (let column = 0; column < columns; column += columnInterval) {
-    context.fillText(String(column + 1), offsetX + (column + .5) * cellWidth, offsetY - fontSize * .75);
+    const x = offsetX + (column + .5) * cellWidth;
+    context.fillText(`${columnPrefix}${column + 1}`, x, offsetY - fontSize * .9);
+    if (showTicks) context.fillRect(Math.round(x), offsetY - 4, 1, 4);
   }
   context.textAlign = 'right';
   for (let row = 0; row < rows; row += rowInterval) {
-    context.fillText(String(row + 1), offsetX - fontSize * .65, offsetY + (row + .5) * cellHeight);
+    const y = offsetY + (row + .5) * cellHeight;
+    context.fillText(`${rowPrefix}${row + 1}`, offsetX - fontSize * .65, y);
+    if (showTicks) context.fillRect(offsetX - 4, Math.round(y), 4, 1);
   }
   context.restore();
 }
@@ -536,16 +540,23 @@ function renderPattern() {
   if (!generatedPattern) return;
   const { columns, rows, palette, cells, drillShape, transparencyMode } = generatedPattern;
   const cellSize = Number(document.querySelector('#previewZoom').value);
-  const labelGutter = 30;
+  const showCoordinates = document.querySelector('#showCoordinates').checked;
+  const labelGutter = showCoordinates ? 44 : 0;
   const showGrid = document.querySelector('#showGrid').checked && cellSize >= 4;
   const output = document.querySelector('#patternCanvas');
   output.width = columns * cellSize + labelGutter;
   output.height = rows * cellSize + labelGutter;
   const context = output.getContext('2d');
   context.clearRect(0, 0, output.width, output.height);
-  context.fillStyle = '#ffffff';
-  context.fillRect(0, 0, output.width, labelGutter);
-  context.fillRect(0, labelGutter, labelGutter, output.height - labelGutter);
+  if (showCoordinates) {
+    context.fillStyle = '#f1eaf8';
+    context.fillRect(0, 0, output.width, labelGutter);
+    context.fillRect(0, labelGutter, labelGutter, output.height - labelGutter);
+    context.fillStyle = '#6e548a';
+    context.font = '700 8px "DM Sans", sans-serif';
+    context.textAlign = 'center';
+    context.fillText('C / R', labelGutter / 2, labelGutter / 2 + 3);
+  }
   if (transparencyMode === 'fill') {
     context.fillStyle = drillShape === 'round' ? '#eeeaf0' : '#ffffff';
     context.fillRect(labelGutter, labelGutter, columns * cellSize, rows * cellSize);
@@ -577,11 +588,12 @@ function renderPattern() {
   context.strokeStyle = '#766b80';
   context.lineWidth = 1;
   context.strokeRect(labelGutter + .5, labelGutter + .5, columns * cellSize - 1, rows * cellSize - 1);
-  drawGridCoordinates(context, { columns, rows, cellWidth: cellSize, cellHeight: cellSize, offsetX: labelGutter, offsetY: labelGutter });
+  if (showCoordinates) drawGridCoordinates(context, { columns, rows, cellWidth: cellSize, cellHeight: cellSize, offsetX: labelGutter, offsetY: labelGutter, fontSize: 9, columnPrefix: 'C', rowPrefix: 'R', showTicks: true });
 }
 
 document.querySelector('#previewZoom').addEventListener('input', renderPattern);
 document.querySelector('#showGrid').addEventListener('change', renderPattern);
+document.querySelector('#showCoordinates').addEventListener('change', renderPattern);
 document.querySelector('#downloadPreview').addEventListener('click', () => {
   if (!generatedPattern) return;
   const link = document.createElement('a');
