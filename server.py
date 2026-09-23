@@ -155,14 +155,18 @@ def artwork_preview(asset_id: str, preview_name: str):
 
 @app.get("/")
 def index():
-    return send_from_directory(ROOT, "index.html")
+    response = send_from_directory(ROOT, "index.html")
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/<path:path>")
 def static_file(path: str):
     if path not in {"app.js", "conversion.js", "dmc-colors.js", "geometry.js", "styles.css"}:
         return error("File not found.", 404, "not_found")
-    return send_from_directory(ROOT, path)
+    response = send_from_directory(ROOT, path)
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 if __name__ == "__main__":
