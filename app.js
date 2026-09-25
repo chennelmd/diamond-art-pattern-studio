@@ -516,7 +516,8 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const counts = consolidation.counts;
   const occupiedCells = cells.filter(color => color !== -1).length;
   const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
-  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, printLayout, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', samplingMode, backgroundMode, treatedBackgroundCells };
+  const symbols = PatternSymbols.assignSymbols(dmcAssignments.length);
+  generatedPattern = { columns, rows, palette, dmcAssignments, symbols, cells, counts, vendors, drillShape, printLayout, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', samplingMode, backgroundMode, treatedBackgroundCells };
   renderPattern();
   document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span data-stat="occupied">${occupiedCells.toLocaleString()} drills</span><span data-stat="empty" ${occupiedCells === columns * rows ? 'hidden' : ''}>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span><span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${flatColorCleanup.changedCells ? `<span>${flatColorCleanup.changedCells.toLocaleString()} flat-color cells cleaned</span>` : ''}${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
@@ -587,6 +588,29 @@ function drawPrintableGrid(context, layout, columns, rows, offsetX, offsetY) {
   context.strokeStyle = 'rgba(54,45,64,.72)';
   context.lineWidth = Math.max(.75, layout.dpi / 300);
   context.stroke();
+  context.restore();
+}
+
+function drawPrintSymbols(context, layout, offsetX, offsetY, displayMode) {
+  if (displayMode === 'color') return;
+  const { columns, rows, cells, palette, symbols } = generatedPattern;
+  const xBoundaries = PatternGeometry.calculateCellBoundaries(columns, layout.activeWidthPx);
+  const yBoundaries = PatternGeometry.calculateCellBoundaries(rows, layout.activeHeightPx);
+  context.save();
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  cells.forEach((paletteIndex, index) => {
+    if (paletteIndex < 0) return;
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const width = xBoundaries[column + 1] - xBoundaries[column];
+    const height = yBoundaries[row + 1] - yBoundaries[row];
+    const symbol = symbols[paletteIndex];
+    const fontSize = Math.min(width, height) * (symbol.length > 1 ? .42 : .56);
+    context.font = `800 ${fontSize}px Arial, sans-serif`;
+    context.fillStyle = displayMode === 'symbol' ? '#211b29' : PatternSymbols.textColor(palette[paletteIndex]);
+    context.fillText(symbol, offsetX + (xBoundaries[column] + xBoundaries[column + 1]) / 2, offsetY + (yBoundaries[row] + yBoundaries[row + 1]) / 2 + fontSize * .04);
+  });
   context.restore();
 }
 
@@ -913,6 +937,79 @@ async function pngWithDpi(blob, dpi) {
   return new Blob([output], { type: 'image/png' });
 }
 
+async function downloadCanvasWithDpi(canvas, dpi, fileName) {
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('The browser could not create the requested PNG file.');
+  const taggedBlob = await pngWithDpi(blob, dpi);
+  const link = document.createElement('a');
+  link.download = fileName;
+  link.href = URL.createObjectURL(taggedBlob);
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function createLegendPages(dpi, overagePercent) {
+  const rows = PatternSymbols.legendRows(generatedPattern.dmcAssignments, generatedPattern.counts, generatedPattern.symbols, overagePercent);
+  const pageWidth = Math.round(8.5 * dpi);
+  const pageHeight = Math.round(11 * dpi);
+  const margin = Math.round(.35 * dpi);
+  const headerHeight = Math.round(.7 * dpi);
+  const footerHeight = Math.round(.25 * dpi);
+  const columnCount = 4;
+  const rowsPerColumn = 34;
+  const rowsPerPage = columnCount * rowsPerColumn;
+  const columnWidth = (pageWidth - margin * 2) / columnCount;
+  const rowHeight = (pageHeight - margin * 2 - headerHeight - footerHeight) / rowsPerColumn;
+  const pageCount = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+  return Array.from({ length: pageCount }, (_, pageIndex) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = pageWidth;
+    canvas.height = pageHeight;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, pageWidth, pageHeight);
+    context.fillStyle = '#29243d';
+    context.font = `700 ${dpi * 16 / 72}px Georgia, serif`;
+    context.fillText('Diamond Art · DMC Materials Legend', margin, margin + dpi * .18);
+    context.font = `400 ${dpi * 8 / 72}px Arial, sans-serif`;
+    context.fillStyle = '#70697a';
+    context.fillText(`${generatedPattern.columns} × ${generatedPattern.rows} drills · ${rows.length} colors · quantities ${overagePercent ? `include ${overagePercent}% overage` : 'are exact'}`, margin, margin + dpi * .42);
+    const pageRows = rows.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage);
+    pageRows.forEach((entry, index) => {
+      const column = Math.floor(index / rowsPerColumn);
+      const row = index % rowsPerColumn;
+      const x = margin + column * columnWidth;
+      const y = margin + headerHeight + row * rowHeight;
+      const swatchSize = rowHeight * .65;
+      context.fillStyle = `rgb(${entry.rgb.join(',')})`;
+      context.fillRect(x, y + (rowHeight - swatchSize) / 2, swatchSize, swatchSize);
+      context.strokeStyle = '#c8c1cc';
+      context.lineWidth = Math.max(1, dpi / 300);
+      context.strokeRect(x, y + (rowHeight - swatchSize) / 2, swatchSize, swatchSize);
+      context.fillStyle = PatternSymbols.textColor(entry.rgb);
+      context.font = `800 ${Math.min(swatchSize * .54, dpi * 8 / 72)}px Arial, sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(entry.symbol, x + swatchSize / 2, y + rowHeight / 2);
+      context.textAlign = 'left';
+      context.textBaseline = 'alphabetic';
+      context.fillStyle = '#29243d';
+      context.font = `700 ${dpi * 7 / 72}px Arial, sans-serif`;
+      context.fillText(`DMC ${entry.code}`, x + swatchSize + dpi * .04, y + rowHeight * .31, columnWidth - swatchSize - dpi * .08);
+      context.fillStyle = '#70697a';
+      context.font = `400 ${dpi * 5.5 / 72}px Arial, sans-serif`;
+      context.fillText(entry.name, x + swatchSize + dpi * .04, y + rowHeight * .57, columnWidth - swatchSize - dpi * .08);
+      const quantity = overagePercent ? `${entry.count.toLocaleString()} + ${overagePercent}% = ${entry.withOverage.toLocaleString()}` : `${entry.count.toLocaleString()} drills`;
+      context.fillText(quantity, x + swatchSize + dpi * .04, y + rowHeight * .82, columnWidth - swatchSize - dpi * .08);
+    });
+    context.fillStyle = '#8d8595';
+    context.font = `400 ${dpi * 6 / 72}px Arial, sans-serif`;
+    context.textAlign = 'right';
+    context.fillText(`Page ${pageIndex + 1} of ${pageCount}`, pageWidth - margin, pageHeight - margin / 2);
+    return canvas;
+  });
+}
+
 document.querySelector('#downloadPrint').addEventListener('click', async () => {
   const layout = currentPrintLayout();
   if (!layout?.compatible) return;
@@ -930,6 +1027,7 @@ document.querySelector('#downloadPrint').addEventListener('click', async () => {
     const offsetX = Math.round((output.width - layout.activeWidthPx) / 2);
     const offsetY = Math.round((output.height - layout.activeHeightPx) / 2);
     const { columns, rows, palette, cells, drillShape } = generatedPattern;
+    const displayMode = document.querySelector('#printCellDisplay').value;
     cells.forEach((paletteIndex, index) => {
       if (paletteIndex === -1) return;
       const column = index % columns;
@@ -938,7 +1036,7 @@ document.querySelector('#downloadPrint').addEventListener('click', async () => {
       const x2 = offsetX + Math.round((column + 1) * layout.activeWidthPx / columns);
       const y1 = offsetY + Math.round(row * layout.activeHeightPx / rows);
       const y2 = offsetY + Math.round((row + 1) * layout.activeHeightPx / rows);
-      context.fillStyle = `rgb(${palette[paletteIndex].join(',')})`;
+      context.fillStyle = displayMode === 'symbol' ? '#ffffff' : `rgb(${palette[paletteIndex].join(',')})`;
       if (drillShape === 'round') {
         context.beginPath();
         context.ellipse((x1 + x2) / 2, (y1 + y2) / 2, (x2 - x1) / 2, (y2 - y1) / 2, 0, 0, Math.PI * 2);
@@ -946,6 +1044,7 @@ document.querySelector('#downloadPrint').addEventListener('click', async () => {
       } else context.fillRect(x1, y1, x2 - x1, y2 - y1);
     });
     drawPrintableGrid(context, layout, columns, rows, offsetX, offsetY);
+    drawPrintSymbols(context, layout, offsetX, offsetY, displayMode);
     const cellWidth = layout.activeWidthPx / columns;
     const cellHeight = layout.activeHeightPx / rows;
     const coordinateMetrics = PatternGeometry.calculatePrintLabelMetrics(layout.dpi, layout.marginXIn, layout.marginYIn, layout.activeWidthPx / columns, layout.activeHeightPx / rows);
@@ -953,21 +1052,36 @@ document.querySelector('#downloadPrint').addEventListener('click', async () => {
     context.lineWidth = Math.max(1, layout.dpi / 300);
     context.strokeRect(offsetX, offsetY, layout.activeWidthPx, layout.activeHeightPx);
     drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize: coordinateMetrics.fontSize, columnPrefix: 'C', rowPrefix: 'R', showTicks: true, columnInterval: coordinateMetrics.columnInterval, rowInterval: coordinateMetrics.rowInterval });
-    const blob = await new Promise(resolve => output.toBlob(resolve, 'image/png'));
-    if (!blob) throw new Error('The browser could not create the requested print file.');
-    const exactScaleBlob = await pngWithDpi(blob, layout.dpi);
-    const link = document.createElement('a');
-    link.download = `diamond-pattern-${layout.printWidthIn}x${layout.printHeightIn}in-${layout.dpi}dpi.png`;
-    link.href = URL.createObjectURL(exactScaleBlob);
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    await downloadCanvasWithDpi(output, layout.dpi, `diamond-pattern-${layout.printWidthIn}x${layout.printHeightIn}in-${layout.dpi}dpi.png`);
   } catch (error) {
     const message = document.querySelector('#printError');
     message.hidden = false;
     message.textContent = `Export failed: ${error.message}`;
   } finally {
     button.disabled = false;
-    button.innerHTML = 'Download exact-scale PNG <span>↓</span>';
+    button.innerHTML = 'Download exact-scale pattern <span>↓</span>';
+  }
+});
+
+document.querySelector('#downloadLegend').addEventListener('click', async () => {
+  const button = document.querySelector('#downloadLegend');
+  const dpi = Number(document.querySelector('#exportDpi').value);
+  const overage = Number(document.querySelector('#legendOverage').value);
+  button.disabled = true;
+  button.textContent = 'Preparing materials legend…';
+  try {
+    const pages = createLegendPages(dpi, overage);
+    for (let index = 0; index < pages.length; index += 1) {
+      await downloadCanvasWithDpi(pages[index], dpi, `diamond-pattern-dmc-legend-page-${index + 1}.png`);
+      if (index < pages.length - 1) await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } catch (error) {
+    const message = document.querySelector('#printError');
+    message.hidden = false;
+    message.textContent = `Legend export failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'Download DMC materials legend <span>↓</span>';
   }
 });
 
