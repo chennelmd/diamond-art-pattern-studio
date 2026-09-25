@@ -116,6 +116,18 @@
     };
   }
 
-  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout, calculateSizeTiers, calculateLabelInterval, calculatePrintLabelMetrics };
+  function calculateLabelPositions(totalCells, interval) {
+    if (!Number.isInteger(totalCells) || totalCells < 1 || !Number.isInteger(interval) || interval < 1) {
+      throw new TypeError('Label positions require positive whole numbers.');
+    }
+    const positions = [1];
+    for (let cell = interval; cell <= totalCells; cell += interval) {
+      if (cell !== 1) positions.push(cell);
+    }
+    if (positions.at(-1) !== totalCells) positions.push(totalCells);
+    return positions;
+  }
+
+  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout, calculateSizeTiers, calculateLabelInterval, calculatePrintLabelMetrics, calculateLabelPositions };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternGeometry;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

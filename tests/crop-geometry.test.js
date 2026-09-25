@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { calculateCropRegion, calculateLabelInterval, calculatePrintLabelMetrics, calculatePrintLayout, calculateSizeTiers } = require('../geometry.js');
+const { calculateCropRegion, calculateLabelInterval, calculateLabelPositions, calculatePrintLabelMetrics, calculatePrintLayout, calculateSizeTiers } = require('../geometry.js');
 
 function close(actual, expected) {
   assert.ok(Math.abs(actual - expected) < 0.0001, `${actual} should equal ${expected}`);
@@ -74,5 +74,9 @@ assert.equal(printLabels.rowInterval, 5);
 const tightPrintLabels = calculatePrintLabelMetrics(300, 0.08, 0.08, 29.53, 29.53);
 assert.ok(tightPrintLabels.fontSizePt >= 2.5);
 assert.throws(() => calculatePrintLabelMetrics(300, 0, 0.5, 30, 30), /positive/);
+assert.deepEqual(calculateLabelPositions(254, 5).slice(0, 4), [1, 5, 10, 15]);
+assert.deepEqual(calculateLabelPositions(254, 5).slice(-2), [250, 254]);
+assert.deepEqual(calculateLabelPositions(10, 5), [1, 5, 10]);
+assert.throws(() => calculateLabelPositions(10, 0), /positive whole/);
 
 console.log('crop geometry tests passed');

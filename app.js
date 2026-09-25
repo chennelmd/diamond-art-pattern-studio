@@ -552,17 +552,17 @@ function drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, of
   context.font = `700 ${fontSize}px "DM Sans", sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
-  for (let column = 0; column < columns; column += columnInterval) {
-    const x = offsetX + (column + .5) * cellWidth;
-    context.fillText(`${columnPrefix}${column + 1}`, x, offsetY - fontSize * .9);
+  PatternGeometry.calculateLabelPositions(columns, columnInterval).forEach(columnNumber => {
+    const x = offsetX + (columnNumber - .5) * cellWidth;
+    context.fillText(`${columnPrefix}${columnNumber}`, x, offsetY - fontSize * .9);
     if (showTicks) context.fillRect(Math.round(x), offsetY - 4, 1, 4);
-  }
+  });
   context.textAlign = 'right';
-  for (let row = 0; row < rows; row += rowInterval) {
-    const y = offsetY + (row + .5) * cellHeight;
-    context.fillText(`${rowPrefix}${row + 1}`, offsetX - fontSize * .65, y);
+  PatternGeometry.calculateLabelPositions(rows, rowInterval).forEach(rowNumber => {
+    const y = offsetY + (rowNumber - .5) * cellHeight;
+    context.fillText(`${rowPrefix}${rowNumber}`, offsetX - fontSize * .65, y);
     if (showTicks) context.fillRect(offsetX - 4, Math.round(y), 4, 1);
-  }
+  });
   context.restore();
 }
 
@@ -833,7 +833,7 @@ function updatePreflight() {
   document.querySelector('#marginSummary').textContent = `${Math.max(0, layout.marginXIn).toFixed(4)} in horizontal · ${Math.max(0, layout.marginYIn).toFixed(4)} in vertical`;
   if (layout.compatible) {
     const labels = PatternGeometry.calculatePrintLabelMetrics(layout.dpi, layout.marginXIn, layout.marginYIn, layout.activeWidthPx / layout.columns, layout.activeHeightPx / layout.rows);
-    document.querySelector('#coordinateSummary').textContent = `C/R labels every ${labels.columnInterval} column${labels.columnInterval === 1 ? '' : 's'} and ${labels.rowInterval} row${labels.rowInterval === 1 ? '' : 's'} · ${labels.fontSizePt.toFixed(1)} pt`;
+    document.querySelector('#coordinateSummary').textContent = `First, last, and every ${labels.columnInterval}th column / ${labels.rowInterval}th row · ${labels.fontSizePt.toFixed(1)} pt`;
   } else document.querySelector('#coordinateSummary').textContent = 'Increase the print canvas to make room for labels.';
   const error = document.querySelector('#printError');
   error.hidden = layout.compatible;

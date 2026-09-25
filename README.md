@@ -46,7 +46,7 @@ python server.py
 
 Then open `http://localhost:4173`.
 
-The current interface shows `Build 2026.09.28` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
+The current interface shows `Build 2026.09.30` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
 
 ## Choosing a pattern size
 
@@ -72,7 +72,7 @@ Choosing an option immediately updates the Width and Height fields. You can stil
 - Connected click-and-tolerance background selection with preserve, automatic/manual 3–5 shade simplification, and solid-color replacement
 - Import and setup workspace with image metadata, aspect-ratio locking, drill profiles, multi-vendor selection, and exact whole-cell grid calculations
 - Color-reduced, true-proportion drill-grid preview with zoom, grid inspection, palette counts, and PNG download
-- Numbered column and row coordinates outside the top and left edges of preview and print grids, with print labels sized in physical points and automatically spaced for legibility
+- Numbered column and row coordinates outside the top and left edges of preview and print grids, including the first and last cell plus evenly spaced round-number landmarks
 - Shape-accurate round and square drill rendering with explained whole-cell rounding choices
 - Exact-scale professional print preflight with centimeter-based sizing, whole-inch canvas recommendations, centered margins, DPI metadata, undersized-canvas protection, and PNG export
 - Artwork-based smaller/recommended/larger grid tiers using measured edge detail, color variety, aspect ratio, resolution, and drill pitch
