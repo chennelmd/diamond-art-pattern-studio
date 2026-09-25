@@ -623,7 +623,7 @@ function renderPattern() {
     context.fillStyle = `rgb(${color.join(',')})`;
     if (drillShape === 'round') {
       context.beginPath();
-      context.arc(x + cellSize / 2, y + cellSize / 2, Math.max(.75, cellSize * .44), 0, Math.PI * 2);
+      context.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 2, 0, Math.PI * 2);
       context.fill();
       if (showGrid) {
         context.strokeStyle = 'rgba(35,30,45,.22)';
@@ -694,7 +694,7 @@ function renderEditor() {
     context.fillStyle = `rgb(${palette[paletteIndex].join(',')})`;
     if (drillShape === 'round') {
       context.beginPath();
-      context.arc(x + cellSize / 2, y + cellSize / 2, cellSize * .42, 0, Math.PI * 2);
+      context.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 2, 0, Math.PI * 2);
       context.fill();
     } else context.fillRect(x, y, cellSize, cellSize);
     context.strokeStyle = 'rgba(35,30,45,.18)';
@@ -851,7 +851,7 @@ function updatePreflight() {
   document.querySelector('#diamondAreaSummary').textContent = `${layout.exactWidthCm.toFixed(2)} × ${layout.exactHeightCm.toFixed(2)} cm`;
   document.querySelector('#diamondInchesSummary').textContent = `${layout.exactWidthMm.toFixed(1)} × ${layout.exactHeightMm.toFixed(1)} mm · ${layout.exactWidthIn.toFixed(3)} × ${layout.exactHeightIn.toFixed(3)} in`;
   document.querySelector('#drillGridSummary').textContent = `${layout.columns} × ${layout.rows} drills`;
-  document.querySelector('#pitchSummary').textContent = `${layout.pitchMm.toFixed(1)} mm pitch`;
+  document.querySelector('#pitchSummary').textContent = `${layout.pitchMm.toFixed(1)} mm edge-to-edge cell pitch · no added grid gap`;
   document.querySelector('#gridLineSummary').textContent = `${layout.columns + 1} vertical × ${layout.rows + 1} horizontal boundary lines included`;
   document.querySelector('#printFileSummary').textContent = `${layout.printWidthIn} × ${layout.printHeightIn} in · ${layout.dpi} DPI`;
   document.querySelector('#pixelSummary').textContent = `${layout.canvasWidthPx.toLocaleString()} × ${layout.canvasHeightPx.toLocaleString()} px`;
@@ -941,7 +941,7 @@ document.querySelector('#downloadPrint').addEventListener('click', async () => {
       context.fillStyle = `rgb(${palette[paletteIndex].join(',')})`;
       if (drillShape === 'round') {
         context.beginPath();
-        context.ellipse((x1 + x2) / 2, (y1 + y2) / 2, (x2 - x1) * .44, (y2 - y1) * .44, 0, 0, Math.PI * 2);
+        context.ellipse((x1 + x2) / 2, (y1 + y2) / 2, (x2 - x1) / 2, (y2 - y1) / 2, 0, 0, Math.PI * 2);
         context.fill();
       } else context.fillRect(x1, y1, x2 - x1, y2 - y1);
     });

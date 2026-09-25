@@ -79,7 +79,11 @@ assert.deepEqual(calculateLabelPositions(254, 5).slice(-2), [250, 254]);
 assert.deepEqual(calculateLabelPositions(10, 5), [1, 5, 10]);
 assert.throws(() => calculateLabelPositions(10, 0), /positive whole/);
 assert.deepEqual(calculateCellBoundaries(4, 10), [0, 3, 5, 8, 10]);
-assert.equal(calculateCellBoundaries(254, 7500).length, 255);
+const printGridBoundaries = calculateCellBoundaries(254, 7500);
+assert.equal(printGridBoundaries.length, 255);
+assert.equal(printGridBoundaries[0], 0);
+assert.equal(printGridBoundaries.at(-1), 7500);
+assert.ok(printGridBoundaries.every((boundary, index) => index === 0 || boundary > printGridBoundaries[index - 1]), 'Every cell must begin where the previous cell ends, without a gap.');
 assert.throws(() => calculateCellBoundaries(0, 100), /positive cell count/);
 
 console.log('crop geometry tests passed');
