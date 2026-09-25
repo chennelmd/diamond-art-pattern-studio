@@ -67,6 +67,11 @@ let recommendationTiers = [];
 let recommendationTierIndex = 1;
 let backgroundSelection = null;
 let selectingBackground = false;
+let editorTool = 'paint';
+let editorPaletteIndex = 0;
+let editorUndoStack = [];
+let editorRedoStack = [];
+let activeEditTransaction = null;
 
 function resolvedSamplingMode() {
   const choice = document.querySelector('#artworkSampling').value;
@@ -416,6 +421,10 @@ document.querySelector('#backToProjects').addEventListener('click', () => {
 });
 document.querySelector('#generatePattern').addEventListener('click', async () => {
   if (!selectedImage) return;
+  document.querySelector('#editorPanel').hidden = true;
+  document.querySelector('#preflightPanel').hidden = true;
+  editorUndoStack = [];
+  editorRedoStack = [];
   const vendors = [...document.querySelectorAll('.vendor-choice:checked')].map(choice => choice.value);
   const vendorError = document.querySelector('#vendorError');
   vendorError.hidden = vendors.length > 0;
@@ -509,7 +518,7 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
   generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, printLayout, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', samplingMode, backgroundMode, treatedBackgroundCells };
   renderPattern();
-  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${flatColorCleanup.changedCells ? `<span>${flatColorCleanup.changedCells.toLocaleString()} flat-color cells cleaned</span>` : ''}${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
+  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span data-stat="occupied">${occupiedCells.toLocaleString()} drills</span><span data-stat="empty" ${occupiedCells === columns * rows ? 'hidden' : ''}>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span><span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${flatColorCleanup.changedCells ? `<span>${flatColorCleanup.changedCells.toLocaleString()} flat-color cells cleaned</span>` : ''}${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
   document.querySelector('#patternPalette').innerHTML = dmcAssignments.map((color, index) => `<span title="DMC ${color.code} · ${color.name} · ${counts[index].toLocaleString()} drills"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><b>${color.code}</b><small>${counts[index].toLocaleString()}</small></span>`).join('');
   const result = document.querySelector('#patternResult');
@@ -612,6 +621,171 @@ function renderPattern() {
   if (showCoordinates) drawGridCoordinates(context, { columns, rows, cellWidth: cellSize, cellHeight: cellSize, offsetX: labelGutter, offsetY: labelGutter, fontSize: 9, columnPrefix: 'C', rowPrefix: 'R', showTicks: true });
 }
 
+function refreshPatternCounts() {
+  if (!generatedPattern) return;
+  const summary = PatternEditor.countCells(generatedPattern.cells, generatedPattern.palette.length);
+  generatedPattern.counts = summary.counts;
+  generatedPattern.occupiedCells = summary.occupied;
+  document.querySelector('#editorOccupied').textContent = summary.occupied.toLocaleString();
+  document.querySelector('#editorEmpty').textContent = summary.empty.toLocaleString();
+  const occupiedStat = document.querySelector('[data-stat="occupied"]');
+  const emptyStat = document.querySelector('[data-stat="empty"]');
+  if (occupiedStat) occupiedStat.textContent = `${summary.occupied.toLocaleString()} drills`;
+  if (emptyStat) {
+    emptyStat.textContent = `${summary.empty.toLocaleString()} blank cells`;
+    emptyStat.hidden = summary.empty === 0;
+  }
+  document.querySelector('#patternPalette').innerHTML = generatedPattern.dmcAssignments.map((color, index) => `<span title="DMC ${color.code} · ${color.name} · ${summary.counts[index].toLocaleString()} drills"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><b>${color.code}</b><small>${summary.counts[index].toLocaleString()}</small></span>`).join('');
+}
+
+function renderEditorPalette() {
+  if (!generatedPattern) return;
+  const palette = document.querySelector('#editorPalette');
+  palette.innerHTML = generatedPattern.dmcAssignments.map((color, index) => `<button type="button" role="option" aria-selected="${index === editorPaletteIndex}" class="${index === editorPaletteIndex ? 'selected' : ''}" data-palette-index="${index}"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><span><b>DMC ${color.code}</b><small>${color.name} · ${generatedPattern.counts[index].toLocaleString()}</small></span></button>`).join('');
+  palette.querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
+    editorPaletteIndex = Number(button.dataset.paletteIndex);
+    editorTool = 'paint';
+    document.querySelectorAll('.editor-tool').forEach(tool => tool.classList.toggle('active', tool.dataset.tool === 'paint'));
+    renderEditorPalette();
+  }));
+}
+
+function renderEditor() {
+  if (!generatedPattern) return;
+  const { columns, rows, palette, cells, drillShape } = generatedPattern;
+  const cellSize = Number(document.querySelector('#editorZoom').value);
+  const gutter = 44;
+  const canvas = document.querySelector('#editorCanvas');
+  canvas.width = columns * cellSize + gutter;
+  canvas.height = rows * cellSize + gutter;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#f1eaf8';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#fff';
+  context.fillRect(gutter, gutter, columns * cellSize, rows * cellSize);
+  cells.forEach((paletteIndex, index) => {
+    if (paletteIndex < 0) return;
+    const x = gutter + (index % columns) * cellSize;
+    const y = gutter + Math.floor(index / columns) * cellSize;
+    context.fillStyle = `rgb(${palette[paletteIndex].join(',')})`;
+    if (drillShape === 'round') {
+      context.beginPath();
+      context.arc(x + cellSize / 2, y + cellSize / 2, cellSize * .42, 0, Math.PI * 2);
+      context.fill();
+    } else context.fillRect(x, y, cellSize, cellSize);
+    context.strokeStyle = 'rgba(35,30,45,.18)';
+    context.strokeRect(x + .5, y + .5, cellSize - 1, cellSize - 1);
+  });
+  context.beginPath();
+  context.strokeStyle = 'rgba(35,30,45,.12)';
+  context.lineWidth = 1;
+  for (let column = 0; column <= columns; column += 1) {
+    const x = gutter + column * cellSize + .5;
+    context.moveTo(x, gutter);
+    context.lineTo(x, gutter + rows * cellSize);
+  }
+  for (let row = 0; row <= rows; row += 1) {
+    const y = gutter + row * cellSize + .5;
+    context.moveTo(gutter, y);
+    context.lineTo(gutter + columns * cellSize, y);
+  }
+  context.stroke();
+  context.strokeStyle = '#766b80';
+  context.strokeRect(gutter + .5, gutter + .5, columns * cellSize - 1, rows * cellSize - 1);
+  drawGridCoordinates(context, { columns, rows, cellWidth: cellSize, cellHeight: cellSize, offsetX: gutter, offsetY: gutter, fontSize: 9, columnPrefix: 'C', rowPrefix: 'R', showTicks: true });
+}
+
+function updateEditorHistoryButtons() {
+  document.querySelector('#undoEdit').disabled = editorUndoStack.length === 0;
+  document.querySelector('#redoEdit').disabled = editorRedoStack.length === 0;
+}
+
+function finishEditTransaction() {
+  if (!activeEditTransaction) return;
+  const changes = activeEditTransaction.filter(change => change.previousValue !== change.nextValue);
+  activeEditTransaction = null;
+  if (!changes.length) return;
+  editorUndoStack.push(changes);
+  editorRedoStack = [];
+  refreshPatternCounts();
+  renderEditorPalette();
+  renderPattern();
+  updateEditorHistoryButtons();
+}
+
+function editorCellFromPointer(event) {
+  const canvas = document.querySelector('#editorCanvas');
+  const bounds = canvas.getBoundingClientRect();
+  const x = (event.clientX - bounds.left) * canvas.width / bounds.width - 44;
+  const y = (event.clientY - bounds.top) * canvas.height / bounds.height - 44;
+  const cellSize = Number(document.querySelector('#editorZoom').value);
+  const column = Math.floor(x / cellSize);
+  const row = Math.floor(y / cellSize);
+  if (column < 0 || row < 0 || column >= generatedPattern.columns || row >= generatedPattern.rows) return -1;
+  return row * generatedPattern.columns + column;
+}
+
+function editCellAtPointer(event) {
+  const index = editorCellFromPointer(event);
+  if (index < 0) return;
+  if (editorTool === 'pick') {
+    const picked = generatedPattern.cells[index];
+    if (picked >= 0) {
+      editorPaletteIndex = picked;
+      editorTool = 'paint';
+      activeEditTransaction = null;
+      document.querySelectorAll('.editor-tool').forEach(tool => tool.classList.toggle('active', tool.dataset.tool === 'paint'));
+      renderEditorPalette();
+    }
+    return;
+  }
+  PatternEditor.changeCell(generatedPattern.cells, index, editorTool === 'erase' ? -1 : editorPaletteIndex, activeEditTransaction);
+  renderEditor();
+}
+
+document.querySelector('#openEditor').addEventListener('click', () => {
+  editorPaletteIndex = Math.max(0, generatedPattern.counts.indexOf(Math.max(...generatedPattern.counts)));
+  refreshPatternCounts();
+  renderEditorPalette();
+  renderEditor();
+  updateEditorHistoryButtons();
+  document.querySelector('#preflightPanel').hidden = true;
+  const panel = document.querySelector('#editorPanel');
+  panel.hidden = false;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+document.querySelector('#editorZoom').addEventListener('input', renderEditor);
+document.querySelectorAll('.editor-tool').forEach(button => button.addEventListener('click', () => {
+  editorTool = button.dataset.tool;
+  document.querySelectorAll('.editor-tool').forEach(tool => tool.classList.toggle('active', tool === button));
+}));
+const editorCanvas = document.querySelector('#editorCanvas');
+editorCanvas.addEventListener('pointerdown', event => {
+  activeEditTransaction = [];
+  editorCanvas.setPointerCapture(event.pointerId);
+  editCellAtPointer(event);
+});
+editorCanvas.addEventListener('pointermove', event => {
+  if (!activeEditTransaction || editorTool === 'pick') return;
+  editCellAtPointer(event);
+});
+editorCanvas.addEventListener('pointerup', finishEditTransaction);
+editorCanvas.addEventListener('pointercancel', finishEditTransaction);
+document.querySelector('#undoEdit').addEventListener('click', () => {
+  const transaction = editorUndoStack.pop();
+  if (!transaction) return;
+  PatternEditor.applyTransaction(generatedPattern.cells, transaction, 'undo');
+  editorRedoStack.push(transaction);
+  refreshPatternCounts(); renderEditorPalette(); renderEditor(); renderPattern(); updateEditorHistoryButtons();
+});
+document.querySelector('#redoEdit').addEventListener('click', () => {
+  const transaction = editorRedoStack.pop();
+  if (!transaction) return;
+  PatternEditor.applyTransaction(generatedPattern.cells, transaction, 'redo');
+  editorUndoStack.push(transaction);
+  refreshPatternCounts(); renderEditorPalette(); renderEditor(); renderPattern(); updateEditorHistoryButtons();
+});
+
 document.querySelector('#previewZoom').addEventListener('input', renderPattern);
 document.querySelector('#showGrid').addEventListener('change', renderPattern);
 document.querySelector('#showCoordinates').addEventListener('change', renderPattern);
@@ -666,7 +840,7 @@ function updatePreflight() {
   status.classList.toggle('invalid', !layout.compatible);
 }
 
-document.querySelector('#openPreflight').addEventListener('click', () => {
+document.querySelector('#continuePreflight').addEventListener('click', () => {
   const layout = generatedPattern.printLayout;
   document.querySelector('#printWidth').value = layout.recommendedWidthIn;
   document.querySelector('#printHeight').value = layout.recommendedHeightIn;

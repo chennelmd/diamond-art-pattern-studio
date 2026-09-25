@@ -51,13 +51,18 @@ class ArtworkImportTests(unittest.TestCase):
         page = self.client.get("/")
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page.headers["Cache-Control"], "no-store")
-        self.assertIn(b"Build 2026.09.27", page.data)
+        self.assertIn(b"Build 2026.09.28", page.data)
         page.close()
 
         script = self.client.get("/app.js")
         self.assertEqual(script.status_code, 200)
         self.assertEqual(script.headers["Cache-Control"], "no-cache")
         script.close()
+
+        editor = self.client.get("/editor.js")
+        self.assertEqual(editor.status_code, 200)
+        self.assertIn(b"PatternEditor", editor.data)
+        editor.close()
 
     def test_imports_tiff_without_browser_tiff_support(self):
         response = self.import_image("TIFF", "art.tiff")

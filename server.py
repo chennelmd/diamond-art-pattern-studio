@@ -162,7 +162,7 @@ def index():
 
 @app.get("/<path:path>")
 def static_file(path: str):
-    if path not in {"app.js", "conversion.js", "dmc-colors.js", "geometry.js", "styles.css"}:
+    if path not in {"app.js", "conversion.js", "dmc-colors.js", "editor.js", "geometry.js", "styles.css"}:
         return error("File not found.", 404, "not_found")
     response = send_from_directory(ROOT, path)
     response.headers["Cache-Control"] = "no-cache"

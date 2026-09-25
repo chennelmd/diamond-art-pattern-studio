@@ -46,7 +46,7 @@ python server.py
 
 Then open `http://localhost:4173`.
 
-The current interface shows `Build 2026.09.27` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
+The current interface shows `Build 2026.09.28` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
 
 ## Choosing a pattern size
 
@@ -78,6 +78,7 @@ Choosing an option immediately updates the Width and Height fields. You can stil
 - Artwork-based smaller/recommended/larger grid tiers using measured edge detail, color variety, aspect ratio, resolution, and drill pitch
 - Non-destructive crop positioning and configurable transparent-PNG background flattening
 - Conversion-stage confetti cleanup that is completed before manual pattern editing
+- Step 3 cell editor with paint, erase, eyedropper, drag editing, live drill counts, and stroke-level undo/redo
 - Transparent-region modes for full-drill fill, empty partial-drill areas, or later selective editing
 - Fully local static assets and application behavior
 
