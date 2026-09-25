@@ -544,9 +544,9 @@ document.querySelectorAll('#maxColors, #cleanupStrength').forEach(control => con
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
 }));
 
-function drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize = 8, columnPrefix = '', rowPrefix = '', showTicks = false }) {
-  const columnInterval = PatternGeometry.calculateLabelInterval(cellWidth, fontSize * 2.4);
-  const rowInterval = PatternGeometry.calculateLabelInterval(cellHeight, fontSize * 1.7);
+function drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize = 8, columnPrefix = '', rowPrefix = '', showTicks = false, columnInterval, rowInterval }) {
+  columnInterval ||= PatternGeometry.calculateLabelInterval(cellWidth, fontSize * 2.4);
+  rowInterval ||= PatternGeometry.calculateLabelInterval(cellHeight, fontSize * 1.7);
   context.save();
   context.fillStyle = '#33254a';
   context.font = `700 ${fontSize}px "DM Sans", sans-serif`;
@@ -831,6 +831,10 @@ function updatePreflight() {
   document.querySelector('#printFileSummary').textContent = `${layout.printWidthIn} × ${layout.printHeightIn} in · ${layout.dpi} DPI`;
   document.querySelector('#pixelSummary').textContent = `${layout.canvasWidthPx.toLocaleString()} × ${layout.canvasHeightPx.toLocaleString()} px`;
   document.querySelector('#marginSummary').textContent = `${Math.max(0, layout.marginXIn).toFixed(4)} in horizontal · ${Math.max(0, layout.marginYIn).toFixed(4)} in vertical`;
+  if (layout.compatible) {
+    const labels = PatternGeometry.calculatePrintLabelMetrics(layout.dpi, layout.marginXIn, layout.marginYIn, layout.activeWidthPx / layout.columns, layout.activeHeightPx / layout.rows);
+    document.querySelector('#coordinateSummary').textContent = `C/R labels every ${labels.columnInterval} column${labels.columnInterval === 1 ? '' : 's'} and ${labels.rowInterval} row${labels.rowInterval === 1 ? '' : 's'} · ${labels.fontSizePt.toFixed(1)} pt`;
+  } else document.querySelector('#coordinateSummary').textContent = 'Increase the print canvas to make room for labels.';
   const error = document.querySelector('#printError');
   error.hidden = layout.compatible;
   error.textContent = layout.compatible ? '' : `Print size is too small. Use at least ${layout.recommendedWidthIn} × ${layout.recommendedHeightIn} inches.`;
@@ -918,11 +922,11 @@ document.querySelector('#downloadPrint').addEventListener('click', async () => {
     });
     const cellWidth = layout.activeWidthPx / columns;
     const cellHeight = layout.activeHeightPx / rows;
-    const coordinateFontSize = Math.max(6, Math.min(10, offsetX / 3, offsetY * .45));
+    const coordinateMetrics = PatternGeometry.calculatePrintLabelMetrics(layout.dpi, layout.marginXIn, layout.marginYIn, layout.activeWidthPx / columns, layout.activeHeightPx / rows);
     context.strokeStyle = '#51475d';
     context.lineWidth = Math.max(1, layout.dpi / 300);
     context.strokeRect(offsetX, offsetY, layout.activeWidthPx, layout.activeHeightPx);
-    drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize: coordinateFontSize });
+    drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize: coordinateMetrics.fontSize, columnPrefix: 'C', rowPrefix: 'R', showTicks: true, columnInterval: coordinateMetrics.columnInterval, rowInterval: coordinateMetrics.rowInterval });
     const blob = await new Promise(resolve => output.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('The browser could not create the requested print file.');
     const exactScaleBlob = await pngWithDpi(blob, layout.dpi);

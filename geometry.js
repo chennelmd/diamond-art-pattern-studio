@@ -101,6 +101,21 @@
     return [1, 2, 5, 10].map(multiplier => multiplier * magnitude).find(value => value >= minimumInterval) || magnitude * 10;
   }
 
-  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout, calculateSizeTiers, calculateLabelInterval };
+  function calculatePrintLabelMetrics(dpi, marginXIn, marginYIn, cellWidthPx, cellHeightPx) {
+    if (![dpi, marginXIn, marginYIn, cellWidthPx, cellHeightPx].every(value => Number.isFinite(value) && value > 0)) {
+      throw new TypeError('Print label dimensions must be positive numbers.');
+    }
+    const desiredFontSize = dpi * 8 / 72;
+    const availableFontSize = Math.min(marginXIn * dpi / 2.3, marginYIn * dpi * .55);
+    const fontSize = Math.max(dpi * 2.5 / 72, Math.min(desiredFontSize, availableFontSize));
+    return {
+      fontSize,
+      fontSizePt: fontSize * 72 / dpi,
+      columnInterval: calculateLabelInterval(cellWidthPx, fontSize * 2.4),
+      rowInterval: calculateLabelInterval(cellHeightPx, fontSize * 2.4),
+    };
+  }
+
+  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout, calculateSizeTiers, calculateLabelInterval, calculatePrintLabelMetrics };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternGeometry;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -72,7 +72,7 @@ Choosing an option immediately updates the Width and Height fields. You can stil
 - Connected click-and-tolerance background selection with preserve, automatic/manual 3–5 shade simplification, and solid-color replacement
 - Import and setup workspace with image metadata, aspect-ratio locking, drill profiles, multi-vendor selection, and exact whole-cell grid calculations
 - Color-reduced, true-proportion drill-grid preview with zoom, grid inspection, palette counts, and PNG download
-- Numbered column and row coordinates outside the top and left edges of preview and print grids, with a visible preview toggle enabled by default
+- Numbered column and row coordinates outside the top and left edges of preview and print grids, with print labels sized in physical points and automatically spaced for legibility
 - Shape-accurate round and square drill rendering with explained whole-cell rounding choices
 - Exact-scale professional print preflight with centimeter-based sizing, whole-inch canvas recommendations, centered margins, DPI metadata, undersized-canvas protection, and PNG export
 - Artwork-based smaller/recommended/larger grid tiers using measured edge detail, color variety, aspect ratio, resolution, and drill pitch
