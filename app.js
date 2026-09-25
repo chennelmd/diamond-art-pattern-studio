@@ -566,6 +566,30 @@ function drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, of
   context.restore();
 }
 
+function drawPrintableGrid(context, layout, columns, rows, offsetX, offsetY) {
+  const xBoundaries = PatternGeometry.calculateCellBoundaries(columns, layout.activeWidthPx);
+  const yBoundaries = PatternGeometry.calculateCellBoundaries(rows, layout.activeHeightPx);
+  context.save();
+  context.beginPath();
+  xBoundaries.forEach(position => {
+    const x = offsetX + position + .5;
+    context.moveTo(x, offsetY);
+    context.lineTo(x, offsetY + layout.activeHeightPx);
+  });
+  yBoundaries.forEach(position => {
+    const y = offsetY + position + .5;
+    context.moveTo(offsetX, y);
+    context.lineTo(offsetX + layout.activeWidthPx, y);
+  });
+  context.strokeStyle = 'rgba(255,255,255,.58)';
+  context.lineWidth = Math.max(1.5, layout.dpi / 144);
+  context.stroke();
+  context.strokeStyle = 'rgba(54,45,64,.72)';
+  context.lineWidth = Math.max(.75, layout.dpi / 300);
+  context.stroke();
+  context.restore();
+}
+
 function renderPattern() {
   if (!generatedPattern) return;
   const { columns, rows, palette, cells, drillShape, transparencyMode } = generatedPattern;
@@ -828,6 +852,7 @@ function updatePreflight() {
   document.querySelector('#diamondInchesSummary').textContent = `${layout.exactWidthMm.toFixed(1)} × ${layout.exactHeightMm.toFixed(1)} mm · ${layout.exactWidthIn.toFixed(3)} × ${layout.exactHeightIn.toFixed(3)} in`;
   document.querySelector('#drillGridSummary').textContent = `${layout.columns} × ${layout.rows} drills`;
   document.querySelector('#pitchSummary').textContent = `${layout.pitchMm.toFixed(1)} mm pitch`;
+  document.querySelector('#gridLineSummary').textContent = `${layout.columns + 1} vertical × ${layout.rows + 1} horizontal boundary lines included`;
   document.querySelector('#printFileSummary').textContent = `${layout.printWidthIn} × ${layout.printHeightIn} in · ${layout.dpi} DPI`;
   document.querySelector('#pixelSummary').textContent = `${layout.canvasWidthPx.toLocaleString()} × ${layout.canvasHeightPx.toLocaleString()} px`;
   document.querySelector('#marginSummary').textContent = `${Math.max(0, layout.marginXIn).toFixed(4)} in horizontal · ${Math.max(0, layout.marginYIn).toFixed(4)} in vertical`;
@@ -920,6 +945,7 @@ document.querySelector('#downloadPrint').addEventListener('click', async () => {
         context.fill();
       } else context.fillRect(x1, y1, x2 - x1, y2 - y1);
     });
+    drawPrintableGrid(context, layout, columns, rows, offsetX, offsetY);
     const cellWidth = layout.activeWidthPx / columns;
     const cellHeight = layout.activeHeightPx / rows;
     const coordinateMetrics = PatternGeometry.calculatePrintLabelMetrics(layout.dpi, layout.marginXIn, layout.marginYIn, layout.activeWidthPx / columns, layout.activeHeightPx / rows);

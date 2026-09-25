@@ -128,6 +128,13 @@
     return positions;
   }
 
-  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout, calculateSizeTiers, calculateLabelInterval, calculatePrintLabelMetrics, calculateLabelPositions };
+  function calculateCellBoundaries(cellCount, spanPixels) {
+    if (!Number.isInteger(cellCount) || cellCount < 1 || !Number.isFinite(spanPixels) || spanPixels <= 0) {
+      throw new TypeError('Grid boundaries require a positive cell count and pixel span.');
+    }
+    return Array.from({ length: cellCount + 1 }, (_, index) => Math.round(index * spanPixels / cellCount));
+  }
+
+  root.PatternGeometry = { calculateCropRegion, calculatePrintLayout, calculateSizeTiers, calculateLabelInterval, calculatePrintLabelMetrics, calculateLabelPositions, calculateCellBoundaries };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternGeometry;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

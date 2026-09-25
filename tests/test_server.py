@@ -51,7 +51,7 @@ class ArtworkImportTests(unittest.TestCase):
         page = self.client.get("/")
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page.headers["Cache-Control"], "no-store")
-        self.assertIn(b"Build 2026.09.30", page.data)
+        self.assertIn(b"Build 2026.10.01", page.data)
         page.close()
 
         script = self.client.get("/app.js")
