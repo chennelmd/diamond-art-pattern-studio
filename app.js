@@ -948,8 +948,8 @@ async function downloadCanvasWithDpi(canvas, dpi, fileName) {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
-function createLegendPages(dpi, overagePercent) {
-  const rows = PatternSymbols.legendRows(generatedPattern.dmcAssignments, generatedPattern.counts, generatedPattern.symbols, overagePercent);
+function createLegendPages(dpi) {
+  const rows = PatternSymbols.legendRows(generatedPattern.dmcAssignments, generatedPattern.counts, generatedPattern.symbols);
   const pageWidth = Math.round(8.5 * dpi);
   const pageHeight = Math.round(11 * dpi);
   const margin = Math.round(.35 * dpi);
@@ -973,8 +973,7 @@ function createLegendPages(dpi, overagePercent) {
     context.fillText('Diamond Art · DMC Materials Legend', margin, margin + dpi * .18);
     context.font = `400 ${dpi * 8 / 72}px Arial, sans-serif`;
     context.fillStyle = '#70697a';
-    const quantityNote = overagePercent ? `Order totals include ${overagePercent}% extra` : 'Exact drill totals';
-    context.fillText(`${rows.length} colors · ${quantityNote}`, margin, margin + dpi * .42);
+    context.fillText(`${rows.length} colors · exact drill count for every DMC color`, margin, margin + dpi * .42);
 
     const previewSize = Math.round(1.05 * dpi);
     const previewX = margin;
@@ -1005,7 +1004,7 @@ function createLegendPages(dpi, overagePercent) {
     const layout = generatedPattern.printLayout;
     const printWidth = Number(document.querySelector('#printWidth').value);
     const printHeight = Number(document.querySelector('#printHeight').value);
-    const totalMaterials = rows.reduce((total, entry) => total + entry.totalQuantity, 0);
+    const totalMaterials = rows.reduce((total, entry) => total + entry.count, 0);
     const drillPitch = layout.pitchMm;
     const specsX = previewX + previewSize + Math.round(.18 * dpi);
     const specsY = previewY + Math.round(.08 * dpi);
@@ -1017,7 +1016,7 @@ function createLegendPages(dpi, overagePercent) {
       ['GRID', `${generatedPattern.columns} × ${generatedPattern.rows} drills`],
       ['DRILL', `${generatedPattern.drillShape === 'round' ? 'Round' : 'Square'} · ${drillPitch} mm pitch`],
       ['COLORS', `${rows.length} DMC colors`],
-      ['MATERIALS', `${totalMaterials.toLocaleString()} drills total${overagePercent ? ` (includes ${overagePercent}% extra)` : ''}`],
+      ['MATERIALS', `${totalMaterials.toLocaleString()} drills total`],
     ];
     specLines.forEach(([label, value], index) => {
       const y = specsY + index * specLineHeight;
@@ -1053,7 +1052,7 @@ function createLegendPages(dpi, overagePercent) {
       context.fillStyle = '#70697a';
       context.font = `400 ${dpi * 5.5 / 72}px Arial, sans-serif`;
       context.fillText(entry.name, x + swatchSize + dpi * .04, y + rowHeight * .57, columnWidth - swatchSize - dpi * .08);
-      const quantity = `${entry.totalQuantity.toLocaleString()} drills total`;
+      const quantity = `${entry.count.toLocaleString()} drills`;
       context.fillText(quantity, x + swatchSize + dpi * .04, y + rowHeight * .82, columnWidth - swatchSize - dpi * .08);
     });
     context.fillStyle = '#8d8595';
@@ -1120,11 +1119,10 @@ document.querySelector('#downloadPrint').addEventListener('click', async () => {
 document.querySelector('#downloadLegend').addEventListener('click', async () => {
   const button = document.querySelector('#downloadLegend');
   const dpi = Number(document.querySelector('#exportDpi').value);
-  const overage = Number(document.querySelector('#legendOverage').value);
   button.disabled = true;
   button.textContent = 'Preparing materials legend…';
   try {
-    const pages = createLegendPages(dpi, overage);
+    const pages = createLegendPages(dpi);
     for (let index = 0; index < pages.length; index += 1) {
       await downloadCanvasWithDpi(pages[index], dpi, `diamond-pattern-dmc-legend-page-${index + 1}.png`);
       if (index < pages.length - 1) await new Promise(resolve => setTimeout(resolve, 200));

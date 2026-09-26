@@ -20,12 +20,11 @@
     return luminance < 145 ? '#ffffff' : '#211b29';
   }
 
-  function legendRows(assignments, counts, symbols, overagePercent = 10) {
+  function legendRows(assignments, counts, symbols) {
     return assignments.map((color, index) => ({
       ...color,
       symbol: symbols[index],
       count: counts[index] || 0,
-      totalQuantity: Math.ceil((counts[index] || 0) * (100 + overagePercent) / 100),
     })).filter(row => row.count > 0);
   }
 
