@@ -10,6 +10,8 @@ for (const confusingPair of [['▲', '▼'], ['△', '▽'], ['●', '○'], ['�
 assert.ok(symbols.includes('▲'));
 assert.ok(!symbols.includes('▼'), 'A flipped triangle must not be assigned as a second color symbol.');
 assert.ok(symbols.includes('//'), 'The second diagonal symbol must use a visibly distinct double slash.');
+assert.deepEqual(symbols.filter(symbol => ['✖', '×', 'X'].includes(symbol)), ['X'], 'Only one X-shaped symbol may be assigned.');
+assert.deepEqual(symbols.filter(symbol => ['+', '✚'].includes(symbol)), ['✚'], 'Only one plus-shaped symbol may be assigned.');
 const editableSymbols = ['●', '■'];
 assert.equal(setSymbol(editableSymbols, 0, 'AX'), 'AX');
 assert.deepEqual(editableSymbols, ['AX', '■']);
