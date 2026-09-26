@@ -46,7 +46,7 @@ python server.py
 
 Then open `http://localhost:4173`.
 
-The current interface shows `Build 2026.10.05` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
+The current interface shows `Build 2026.10.06` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
 
 ## Choosing a pattern size
 

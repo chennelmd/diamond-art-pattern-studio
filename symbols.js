@@ -28,6 +28,18 @@
     })).filter(row => row.count > 0);
   }
 
-  root.PatternSymbols = { assignSymbols, textColor, legendRows };
+  function legendPageLayout(dpi, specRowCount = 7) {
+    if (!Number.isFinite(dpi) || dpi <= 0) throw new TypeError('Legend DPI must be a positive number.');
+    if (!Number.isInteger(specRowCount) || specRowCount < 0) throw new TypeError('Specification row count must be a non-negative whole number.');
+    const margin = Math.round(.35 * dpi);
+    const headerHeight = Math.round(2.05 * dpi);
+    const specTop = margin + Math.round(.63 * dpi);
+    const specLineHeight = Math.round(.21 * dpi);
+    const specBottom = specRowCount ? specTop + (specRowCount - 1) * specLineHeight + Math.round(.1 * dpi) : specTop;
+    const legendTop = margin + headerHeight;
+    return { margin, headerHeight, specTop, specLineHeight, specBottom, legendTop };
+  }
+
+  root.PatternSymbols = { assignSymbols, textColor, legendRows, legendPageLayout };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.PatternSymbols;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

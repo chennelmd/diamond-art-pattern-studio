@@ -950,10 +950,10 @@ async function downloadCanvasWithDpi(canvas, dpi, fileName) {
 
 function createLegendPages(dpi) {
   const rows = PatternSymbols.legendRows(generatedPattern.dmcAssignments, generatedPattern.counts, generatedPattern.symbols);
+  const legendLayout = PatternSymbols.legendPageLayout(dpi);
   const pageWidth = Math.round(8.5 * dpi);
   const pageHeight = Math.round(11 * dpi);
-  const margin = Math.round(.35 * dpi);
-  const headerHeight = Math.round(1.75 * dpi);
+  const { margin, headerHeight, specTop: specsY, specLineHeight } = legendLayout;
   const footerHeight = Math.round(.25 * dpi);
   const columnCount = 4;
   const rowsPerColumn = 30;
@@ -1007,8 +1007,6 @@ function createLegendPages(dpi) {
     const totalMaterials = rows.reduce((total, entry) => total + entry.count, 0);
     const drillPitch = layout.pitchMm;
     const specsX = previewX + previewSize + Math.round(.18 * dpi);
-    const specsY = previewY + Math.round(.08 * dpi);
-    const specLineHeight = Math.round(.21 * dpi);
     const specLines = [
       ['PROJECT', sourceAsset?.fileName || 'Untitled pattern'],
       ['CANVAS SIZE', `${layout.exactWidthCm.toFixed(2)} × ${layout.exactHeightCm.toFixed(2)} cm (${layout.exactWidthIn.toFixed(2)} × ${layout.exactHeightIn.toFixed(2)} in)`],

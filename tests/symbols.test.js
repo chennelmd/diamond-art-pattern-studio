@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { assignSymbols, legendRows, textColor } = require('../symbols.js');
+const { assignSymbols, legendRows, legendPageLayout, textColor } = require('../symbols.js');
 
 const symbols = assignSymbols(447);
 assert.equal(symbols.length, 447);
@@ -11,5 +11,8 @@ assert.deepEqual(legendRows(
   [100, 0], ['●', '○'],
 ), [{ code: '310', name: 'Black', rgb: [0, 0, 0], symbol: '●', count: 100 }]);
 assert.throws(() => assignSymbols(-1), /non-negative/);
+const legendLayout = legendPageLayout(300);
+assert.ok(legendLayout.specBottom < legendLayout.legendTop, 'Project specifications must end before the first materials row.');
+assert.throws(() => legendPageLayout(0), /positive/);
 
 console.log('pattern symbol tests passed');
