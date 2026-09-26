@@ -46,7 +46,7 @@ python server.py
 
 Then open `http://localhost:4173`.
 
-The current interface shows `Build 2026.10.06` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
+The current interface shows `Build 2026.10.07` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
 
 ## Choosing a pattern size
 
@@ -75,7 +75,7 @@ Choosing an option immediately updates the Width and Height fields. You can stil
 - Numbered column and row coordinates outside the top and left edges of preview and print grids, including the first and last cell plus evenly spaced round-number landmarks
 - A high-contrast printable boundary around every drill cell across the complete active diamond area
 - Grid boundaries overlay shared cell edges and do not consume physical drill space; round drill marks reach the cell edges and square drills fill the full cell
-- Deterministic symbols printed inside occupied cells, with color-plus-symbol, symbol-only, and color-only export modes
+- Deterministic, rotation-safe symbols printed inside occupied cells, without opposing directional pairs that become confusing when a canvas is turned upside down
 - A separate letter-size DMC materials legend with a pattern thumbnail, project specifications, swatches, symbols, DMC codes and names, and the exact drill count for every individual color
 - Shape-accurate round and square drill rendering with explained whole-cell rounding choices
 - Exact-scale professional print preflight with centimeter-based sizing, whole-inch canvas recommendations, centered margins, DPI metadata, undersized-canvas protection, and PNG export

@@ -4,6 +4,11 @@ const { assignSymbols, legendRows, legendPageLayout, textColor } = require('../s
 const symbols = assignSymbols(447);
 assert.equal(symbols.length, 447);
 assert.equal(new Set(symbols).size, 447);
+for (const confusingPair of [['▲', '▼'], ['△', '▽'], ['●', '○'], ['■', '□'], ['◆', '◇'], ['★', '☆'], ['6', '9'], ['M', 'W'], ['<', '>']]) {
+  assert.ok(!confusingPair.every(symbol => symbols.includes(symbol)), `Symbols ${confusingPair.join(' and ')} must not both be assigned.`);
+}
+assert.ok(symbols.includes('▲'));
+assert.ok(!symbols.includes('▼'), 'A flipped triangle must not be assigned as a second color symbol.');
 assert.equal(textColor([0, 0, 0]), '#ffffff');
 assert.equal(textColor([255, 255, 255]), '#211b29');
 assert.deepEqual(legendRows(
