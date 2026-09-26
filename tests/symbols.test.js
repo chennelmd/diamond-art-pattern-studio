@@ -4,11 +4,12 @@ const { assignSymbols, setSymbol, legendRows, legendPageLayout, textColor } = re
 const symbols = assignSymbols(447);
 assert.equal(symbols.length, 447);
 assert.equal(new Set(symbols).size, 447);
-for (const confusingPair of [['▲', '▼'], ['△', '▽'], ['●', '○'], ['■', '□'], ['◆', '◇'], ['★', '☆'], ['6', '9'], ['M', 'W'], ['<', '>']]) {
+for (const confusingPair of [['▲', '▼'], ['△', '▽'], ['●', '○'], ['■', '□'], ['◆', '◇'], ['★', '☆'], ['6', '9'], ['M', 'W'], ['<', '>'], ['/', '\\']]) {
   assert.ok(!confusingPair.every(symbol => symbols.includes(symbol)), `Symbols ${confusingPair.join(' and ')} must not both be assigned.`);
 }
 assert.ok(symbols.includes('▲'));
 assert.ok(!symbols.includes('▼'), 'A flipped triangle must not be assigned as a second color symbol.');
+assert.ok(symbols.includes('//'), 'The second diagonal symbol must use a visibly distinct double slash.');
 const editableSymbols = ['●', '■'];
 assert.equal(setSymbol(editableSymbols, 0, 'AX'), 'AX');
 assert.deepEqual(editableSymbols, ['AX', '■']);
