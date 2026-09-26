@@ -9,7 +9,7 @@ assert.equal(textColor([255, 255, 255]), '#211b29');
 assert.deepEqual(legendRows(
   [{ code: '310', name: 'Black', rgb: [0, 0, 0] }, { code: 'B5200', name: 'Snow White', rgb: [255, 255, 255] }],
   [100, 0], ['●', '○'], 10,
-), [{ code: '310', name: 'Black', rgb: [0, 0, 0], symbol: '●', count: 100, withOverage: 110 }]);
+), [{ code: '310', name: 'Black', rgb: [0, 0, 0], symbol: '●', count: 100, totalQuantity: 110 }]);
 assert.throws(() => assignSymbols(-1), /non-negative/);
 
 console.log('pattern symbol tests passed');

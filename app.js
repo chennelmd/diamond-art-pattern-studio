@@ -953,10 +953,10 @@ function createLegendPages(dpi, overagePercent) {
   const pageWidth = Math.round(8.5 * dpi);
   const pageHeight = Math.round(11 * dpi);
   const margin = Math.round(.35 * dpi);
-  const headerHeight = Math.round(.7 * dpi);
+  const headerHeight = Math.round(1.75 * dpi);
   const footerHeight = Math.round(.25 * dpi);
   const columnCount = 4;
-  const rowsPerColumn = 34;
+  const rowsPerColumn = 30;
   const rowsPerPage = columnCount * rowsPerColumn;
   const columnWidth = (pageWidth - margin * 2) / columnCount;
   const rowHeight = (pageHeight - margin * 2 - headerHeight - footerHeight) / rowsPerColumn;
@@ -973,7 +973,61 @@ function createLegendPages(dpi, overagePercent) {
     context.fillText('Diamond Art · DMC Materials Legend', margin, margin + dpi * .18);
     context.font = `400 ${dpi * 8 / 72}px Arial, sans-serif`;
     context.fillStyle = '#70697a';
-    context.fillText(`${generatedPattern.columns} × ${generatedPattern.rows} drills · ${rows.length} colors · quantities ${overagePercent ? `include ${overagePercent}% overage` : 'are exact'}`, margin, margin + dpi * .42);
+    const quantityNote = overagePercent ? `Order totals include ${overagePercent}% extra` : 'Exact drill totals';
+    context.fillText(`${rows.length} colors · ${quantityNote}`, margin, margin + dpi * .42);
+
+    const previewSize = Math.round(1.05 * dpi);
+    const previewX = margin;
+    const previewY = margin + Math.round(.55 * dpi);
+    context.fillStyle = '#f3f0f5';
+    context.fillRect(previewX, previewY, previewSize, previewSize);
+    const previewScale = Math.min(previewSize / generatedPattern.columns, previewSize / generatedPattern.rows);
+    const previewWidth = generatedPattern.columns * previewScale;
+    const previewHeight = generatedPattern.rows * previewScale;
+    const previewOffsetX = previewX + (previewSize - previewWidth) / 2;
+    const previewOffsetY = previewY + (previewSize - previewHeight) / 2;
+    generatedPattern.cells.forEach((paletteIndex, index) => {
+      if (paletteIndex === -1) return;
+      const column = index % generatedPattern.columns;
+      const row = Math.floor(index / generatedPattern.columns);
+      context.fillStyle = `rgb(${generatedPattern.palette[paletteIndex].join(',')})`;
+      context.fillRect(
+        previewOffsetX + column * previewScale,
+        previewOffsetY + row * previewScale,
+        Math.max(1, previewScale + .25),
+        Math.max(1, previewScale + .25),
+      );
+    });
+    context.strokeStyle = '#c8c1cc';
+    context.lineWidth = Math.max(1, dpi / 150);
+    context.strokeRect(previewX, previewY, previewSize, previewSize);
+
+    const layout = generatedPattern.printLayout;
+    const printWidth = Number(document.querySelector('#printWidth').value);
+    const printHeight = Number(document.querySelector('#printHeight').value);
+    const totalMaterials = rows.reduce((total, entry) => total + entry.totalQuantity, 0);
+    const drillPitch = layout.pitchMm;
+    const specsX = previewX + previewSize + Math.round(.18 * dpi);
+    const specsY = previewY + Math.round(.08 * dpi);
+    const specLineHeight = Math.round(.21 * dpi);
+    const specLines = [
+      ['PROJECT', sourceAsset?.fileName || 'Untitled pattern'],
+      ['CANVAS SIZE', `${layout.exactWidthCm.toFixed(2)} × ${layout.exactHeightCm.toFixed(2)} cm (${layout.exactWidthIn.toFixed(2)} × ${layout.exactHeightIn.toFixed(2)} in)`],
+      ['PRINT FILE', `${printWidth} × ${printHeight} in at ${dpi} DPI`],
+      ['GRID', `${generatedPattern.columns} × ${generatedPattern.rows} drills`],
+      ['DRILL', `${generatedPattern.drillShape === 'round' ? 'Round' : 'Square'} · ${drillPitch} mm pitch`],
+      ['COLORS', `${rows.length} DMC colors`],
+      ['MATERIALS', `${totalMaterials.toLocaleString()} drills total${overagePercent ? ` (includes ${overagePercent}% extra)` : ''}`],
+    ];
+    specLines.forEach(([label, value], index) => {
+      const y = specsY + index * specLineHeight;
+      context.fillStyle = '#8d8595';
+      context.font = `700 ${dpi * 5.5 / 72}px Arial, sans-serif`;
+      context.fillText(label, specsX, y);
+      context.fillStyle = '#29243d';
+      context.font = `600 ${dpi * 7 / 72}px Arial, sans-serif`;
+      context.fillText(value, specsX + Math.round(.72 * dpi), y);
+    });
     const pageRows = rows.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage);
     pageRows.forEach((entry, index) => {
       const column = Math.floor(index / rowsPerColumn);
@@ -999,7 +1053,7 @@ function createLegendPages(dpi, overagePercent) {
       context.fillStyle = '#70697a';
       context.font = `400 ${dpi * 5.5 / 72}px Arial, sans-serif`;
       context.fillText(entry.name, x + swatchSize + dpi * .04, y + rowHeight * .57, columnWidth - swatchSize - dpi * .08);
-      const quantity = overagePercent ? `${entry.count.toLocaleString()} + ${overagePercent}% = ${entry.withOverage.toLocaleString()}` : `${entry.count.toLocaleString()} drills`;
+      const quantity = `${entry.totalQuantity.toLocaleString()} drills total`;
       context.fillText(quantity, x + swatchSize + dpi * .04, y + rowHeight * .82, columnWidth - swatchSize - dpi * .08);
     });
     context.fillStyle = '#8d8595';

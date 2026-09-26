@@ -25,7 +25,7 @@
       ...color,
       symbol: symbols[index],
       count: counts[index] || 0,
-      withOverage: Math.ceil((counts[index] || 0) * (100 + overagePercent) / 100),
+      totalQuantity: Math.ceil((counts[index] || 0) * (100 + overagePercent) / 100),
     })).filter(row => row.count > 0);
   }
 
