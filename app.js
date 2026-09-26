@@ -63,8 +63,30 @@ let aspectRatio = 3 / 4;
 let generatedPattern = null;
 let imageAnalysis = null;
 let recommendedDimensions = null;
+let recommendationTiers = [];
+let recommendationTierIndex = 1;
 let backgroundSelection = null;
 let selectingBackground = false;
+let editorTool = 'paint';
+let editorPaletteIndex = 0;
+let editorUndoStack = [];
+let editorRedoStack = [];
+let activeEditTransaction = null;
+
+function resolvedSamplingMode() {
+  const choice = document.querySelector('#artworkSampling').value;
+  if (choice !== 'automatic') return choice;
+  return sourceAsset?.artworkType === 'illustration' ? 'crisp' : 'smooth';
+}
+
+function updateSamplingHelp() {
+  const choice = document.querySelector('#artworkSampling').value;
+  const detected = sourceAsset?.artworkType === 'illustration' ? 'crisp' : 'smooth';
+  const applied = choice === 'automatic' ? detected : choice;
+  document.querySelector('#samplingHelp').textContent = choice === 'automatic'
+    ? `Automatic detected ${detected} artwork and will use ${applied} sampling. Override this if the preview does not match the source.`
+    : `${applied === 'smooth' ? 'Smooth sampling blends source pixels while resizing.' : 'Crisp sampling keeps hard pixel edges while resizing.'} Regenerate the pattern to apply this choice.`;
+}
 
 async function importArtwork(file) {
   const status = document.querySelector('#fileName');
@@ -77,6 +99,7 @@ async function importArtwork(file) {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || 'The artwork could not be imported.');
     sourceAsset = result;
+    recommendationTierIndex = 1;
     backgroundSelection = null;
     selectingBackground = false;
     document.querySelector('#sourceFrame').classList.remove('background-pick-active');
@@ -97,15 +120,16 @@ async function importArtwork(file) {
     const frameNote = result.frameCount > 1 ? ` · Using page 1 of ${result.frameCount}` : '';
     const typeLabel = result.artworkType === 'illustration' ? 'Illustration detected' : 'Photo detected';
     document.querySelector('#sourceMeta').textContent = `${(result.fileSize / 1024 / 1024).toFixed(2)} MB · Validated and staged locally · ${typeLabel}${frameNote}`;
-    document.querySelector('#targetHeight').value = (12 / aspectRatio).toFixed(1);
+    document.querySelector('#targetHeight').value = (30 / aspectRatio).toFixed(1);
     imageAnalysis = analyzeImage(selectedImage);
     imageAnalysis.hasTransparency = result.hasTransparency;
     imageAnalysis.sourceWidth = result.width;
     imageAnalysis.sourceHeight = result.height;
     document.querySelector('#transparencyOptions').hidden = !result.hasTransparency;
     if (result.hasTransparency) document.querySelector('#sourceMeta').textContent += ' · Transparency detected';
+    updateSamplingHelp();
     updateRecommendation();
-    updateGridMath();
+    applyRecommendedSize();
     status.textContent = `✓ ${result.fileName} imported`;
     continueBtn.disabled = false;
     document.querySelector('#dashboardView').hidden = true;
@@ -234,22 +258,20 @@ function updateRecommendation() {
   if (!imageAnalysis || !selectedImage) return;
   const [, pitchValue] = document.querySelector('#drillProfile').value.split(':');
   const pitch = Number(pitchValue);
-  let columns;
-  let rows;
-  if (aspectRatio >= 1) {
-    rows = imageAnalysis.shortestCells;
-    columns = Math.ceil(rows * aspectRatio);
-  } else {
-    columns = imageAnalysis.shortestCells;
-    rows = Math.ceil(columns / aspectRatio);
-  }
-  const width = columns * pitch / 25.4;
-  const height = rows * pitch / 25.4;
+  recommendationTiers = PatternGeometry.calculateSizeTiers(imageAnalysis.shortestCells, aspectRatio, pitch);
+  const selectedTier = recommendationTiers[recommendationTierIndex];
+  const { columns, rows, widthCm: width, heightCm: height } = selectedTier;
   recommendedDimensions = { width, height };
-  document.querySelector('#recommendedSize').textContent = `${width.toFixed(1)} × ${height.toFixed(1)} in minimum`;
+  const printWidth = Math.ceil(width / 2.54);
+  const printHeight = Math.ceil(height / 2.54);
+  const tierLabels = ['Smaller', 'Recommended', 'Larger'];
+  const sizeTier = document.querySelector('#sizeTier');
+  sizeTier.innerHTML = recommendationTiers.map((tier, index) => `<option value="${index}">${tierLabels[index]} — ${tier.widthCm.toFixed(1)} × ${tier.heightCm.toFixed(1)} cm (${tier.columns} × ${tier.rows} drills)</option>`).join('');
+  sizeTier.value = String(recommendationTierIndex);
+  sizeTier.disabled = false;
+  document.querySelector('#recommendedSize').textContent = `Selected: ${width.toFixed(1)} × ${height.toFixed(1)} cm`;
   const resolutionNote = imageAnalysis.resolutionLimited ? ' · limited by source resolution' : '';
-  document.querySelector('#recommendationReason').textContent = `${imageAnalysis.level} · ${imageAnalysis.colorGroups} color groups · ${columns} × ${rows} cells${resolutionNote}`;
-  document.querySelector('#useRecommendedSize').disabled = false;
+  document.querySelector('#recommendationReason').textContent = `${tierLabels[recommendationTierIndex]} detail · ${columns} × ${rows} drills · fits a ${printWidth} × ${printHeight} in print file${resolutionNote}`;
 }
 
 function updateGridMath(changedField) {
@@ -263,17 +285,20 @@ function updateGridMath(changedField) {
   const height = Math.max(1, Number(heightInput.value) || 1);
   const [, pitchValue] = document.querySelector('#drillProfile').value.split(':');
   const pitch = Number(pitchValue);
-  const rounder = Math[document.querySelector('#roundingMode').value];
-  const columns = Math.max(1, rounder(width * 25.4 / pitch));
-  const rows = Math.max(1, rounder(height * 25.4 / pitch));
-  const actualWidth = columns * pitch / 25.4;
-  const actualHeight = rows * pitch / 25.4;
+  const layout = PatternGeometry.calculatePrintLayout(width, height, pitch, {
+    roundingMode: document.querySelector('#roundingMode').value,
+  });
+  const { columns, rows, exactWidthCm: actualWidth, exactHeightCm: actualHeight } = layout;
   const signed = value => `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
   document.querySelector('#gridDimensions').textContent = `${columns} × ${rows} cells`;
-  document.querySelector('#actualSize').textContent = `${actualWidth.toFixed(2)} × ${actualHeight.toFixed(2)} in`;
-  document.querySelector('#sizeDifference').textContent = `${signed(actualWidth - width)} × ${signed(actualHeight - height)} in`;
+  document.querySelector('#actualSize').textContent = `${actualWidth.toFixed(2)} × ${actualHeight.toFixed(2)} cm`;
+  document.querySelector('#actualSizeInches').textContent = `${layout.exactWidthIn.toFixed(2)} × ${layout.exactHeightIn.toFixed(2)} in`;
+  document.querySelector('#recommendedPrintSize').textContent = `${layout.recommendedWidthIn} × ${layout.recommendedHeightIn} in`;
+  document.querySelector('#sizeDifference').textContent = `${signed(actualWidth - width)} × ${signed(actualHeight - height)} cm`;
+  document.querySelector('#setupWarning').textContent = `ⓘ Do not round the diamond area. Use a ${layout.recommendedWidthIn} × ${layout.recommendedHeightIn} in print file; the extra space becomes centered margins.`;
+  if (generatedPattern) document.querySelector('#preflightPanel').hidden = true;
   if (selectedImage) updateCropPreview();
-  return { columns, rows };
+  return layout;
 }
 
 function cleanPatternCells(sourceCells, columns, rows, strength) {
@@ -324,12 +349,20 @@ continueBtn.addEventListener('click', async (event) => {
 
 document.querySelectorAll('#targetWidth, #targetHeight').forEach(field => field.addEventListener('input', () => updateGridMath(field)));
 document.querySelectorAll('#drillProfile, #roundingMode, #lockRatio').forEach(field => field.addEventListener('change', () => updateGridMath()));
-document.querySelector('#drillProfile').addEventListener('change', updateRecommendation);
-document.querySelector('#useRecommendedSize').addEventListener('click', () => {
+document.querySelector('#drillProfile').addEventListener('change', () => {
+  updateRecommendation();
+  applyRecommendedSize();
+});
+function applyRecommendedSize() {
   if (!recommendedDimensions) return;
   document.querySelector('#targetWidth').value = recommendedDimensions.width.toFixed(1);
   document.querySelector('#targetHeight').value = recommendedDimensions.height.toFixed(1);
   updateGridMath();
+}
+document.querySelector('#sizeTier').addEventListener('change', event => {
+  recommendationTierIndex = Number(event.target.value);
+  updateRecommendation();
+  applyRecommendedSize();
 });
 document.querySelectorAll('#cropZoom, #cropX, #cropY').forEach(control => control.addEventListener('input', updateCropPreview));
 document.querySelector('#backgroundColor').addEventListener('input', () => {
@@ -355,6 +388,10 @@ document.querySelector('#selectBackground').addEventListener('click', () => {
 document.querySelector('#sourceFrame').addEventListener('click', sampleSelectedBackground);
 document.querySelector('#backgroundTolerance').addEventListener('input', event => {
   document.querySelector('#backgroundToleranceValue').textContent = event.target.value;
+  if (generatedPattern) document.querySelector('#patternResult').hidden = true;
+});
+document.querySelector('#artworkSampling').addEventListener('change', () => {
+  updateSamplingHelp();
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
 });
 document.querySelectorAll('#backgroundShadeCount, #backgroundDarkColor, #backgroundLightColor, #solidBackgroundColor, #solidBackgroundStyle').forEach(control => control.addEventListener('input', () => {
@@ -384,17 +421,23 @@ document.querySelector('#backToProjects').addEventListener('click', () => {
 });
 document.querySelector('#generatePattern').addEventListener('click', async () => {
   if (!selectedImage) return;
+  document.querySelector('#editorPanel').hidden = true;
+  document.querySelector('#preflightPanel').hidden = true;
+  editorUndoStack = [];
+  editorRedoStack = [];
   const vendors = [...document.querySelectorAll('.vendor-choice:checked')].map(choice => choice.value);
   const vendorError = document.querySelector('#vendorError');
   vendorError.hidden = vendors.length > 0;
   if (!vendors.length) return;
-  const { columns, rows } = updateGridMath();
+  const printLayout = updateGridMath();
+  const { columns, rows } = printLayout;
   const [drillShape] = document.querySelector('#drillProfile').value.split(':');
   const sample = document.createElement('canvas');
   sample.width = columns;
   sample.height = rows;
   const sampleContext = sample.getContext('2d');
-  const illustrationMode = sourceAsset?.artworkType === 'illustration';
+  const samplingMode = resolvedSamplingMode();
+  const illustrationMode = samplingMode === 'crisp';
   sampleContext.imageSmoothingEnabled = !illustrationMode;
   if (!illustrationMode) sampleContext.imageSmoothingQuality = 'high';
   const transparencyMode = document.querySelector('input[name="transparencyMode"]:checked').value;
@@ -473,15 +516,16 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const counts = consolidation.counts;
   const occupiedCells = cells.filter(color => color !== -1).length;
   const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
-  generatedPattern = { columns, rows, palette, dmcAssignments, cells, counts, vendors, drillShape, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', backgroundMode, treatedBackgroundCells };
+  const symbols = PatternSymbols.assignSymbols(dmcAssignments.length);
+  generatedPattern = { columns, rows, palette, dmcAssignments, symbols, cells, counts, vendors, drillShape, printLayout, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', samplingMode, backgroundMode, treatedBackgroundCells };
   renderPattern();
-  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span>${occupiedCells.toLocaleString()} drills</span>${occupiedCells < columns * rows ? `<span>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span>` : ''}<span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${flatColorCleanup.changedCells ? `<span>${flatColorCleanup.changedCells.toLocaleString()} flat-color cells cleaned</span>` : ''}${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
+  document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span data-stat="occupied">${occupiedCells.toLocaleString()} drills</span><span data-stat="empty" ${occupiedCells === columns * rows ? 'hidden' : ''}>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span><span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${flatColorCleanup.changedCells ? `<span>${flatColorCleanup.changedCells.toLocaleString()} flat-color cells cleaned</span>` : ''}${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
   document.querySelector('#patternPalette').innerHTML = dmcAssignments.map((color, index) => `<span title="DMC ${color.code} · ${color.name} · ${counts[index].toLocaleString()} drills"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><b>${color.code}</b><small>${counts[index].toLocaleString()}</small></span>`).join('');
   const result = document.querySelector('#patternResult');
   result.hidden = false;
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  document.querySelector('#setupWarning').textContent = 'ⓘ Dimensions are rounded to the nearest whole drill cell.';
+  document.querySelector('#setupWarning').textContent = `ⓘ Keep the ${printLayout.exactWidthIn.toFixed(2)} × ${printLayout.exactHeightIn.toFixed(2)} in diamond area exact; use a ${printLayout.recommendedWidthIn} × ${printLayout.recommendedHeightIn} in print file.`;
   } catch (error) {
     console.error('Pattern generation failed:', error);
     document.querySelector('#setupWarning').textContent = `⚠ Pattern generation failed: ${error.message}`;
@@ -501,29 +545,109 @@ document.querySelectorAll('#maxColors, #cleanupStrength').forEach(control => con
   if (generatedPattern) document.querySelector('#patternResult').hidden = true;
 }));
 
+function drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize = 8, columnPrefix = '', rowPrefix = '', showTicks = false, columnInterval, rowInterval }) {
+  columnInterval ||= PatternGeometry.calculateLabelInterval(cellWidth, fontSize * 2.4);
+  rowInterval ||= PatternGeometry.calculateLabelInterval(cellHeight, fontSize * 1.7);
+  context.save();
+  context.fillStyle = '#33254a';
+  context.font = `700 ${fontSize}px "DM Sans", sans-serif`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  PatternGeometry.calculateLabelPositions(columns, columnInterval).forEach(columnNumber => {
+    const x = offsetX + (columnNumber - .5) * cellWidth;
+    context.fillText(`${columnPrefix}${columnNumber}`, x, offsetY - fontSize * .9);
+    if (showTicks) context.fillRect(Math.round(x), offsetY - 4, 1, 4);
+  });
+  context.textAlign = 'right';
+  PatternGeometry.calculateLabelPositions(rows, rowInterval).forEach(rowNumber => {
+    const y = offsetY + (rowNumber - .5) * cellHeight;
+    context.fillText(`${rowPrefix}${rowNumber}`, offsetX - fontSize * .65, y);
+    if (showTicks) context.fillRect(offsetX - 4, Math.round(y), 4, 1);
+  });
+  context.restore();
+}
+
+function drawPrintableGrid(context, layout, columns, rows, offsetX, offsetY) {
+  const xBoundaries = PatternGeometry.calculateCellBoundaries(columns, layout.activeWidthPx);
+  const yBoundaries = PatternGeometry.calculateCellBoundaries(rows, layout.activeHeightPx);
+  context.save();
+  context.beginPath();
+  xBoundaries.forEach(position => {
+    const x = offsetX + position + .5;
+    context.moveTo(x, offsetY);
+    context.lineTo(x, offsetY + layout.activeHeightPx);
+  });
+  yBoundaries.forEach(position => {
+    const y = offsetY + position + .5;
+    context.moveTo(offsetX, y);
+    context.lineTo(offsetX + layout.activeWidthPx, y);
+  });
+  context.strokeStyle = 'rgba(255,255,255,.58)';
+  context.lineWidth = Math.max(1.5, layout.dpi / 144);
+  context.stroke();
+  context.strokeStyle = 'rgba(54,45,64,.72)';
+  context.lineWidth = Math.max(.75, layout.dpi / 300);
+  context.stroke();
+  context.restore();
+}
+
+function drawPrintSymbols(context, layout, offsetX, offsetY, displayMode) {
+  if (displayMode === 'color') return;
+  const { columns, rows, cells, palette, symbols } = generatedPattern;
+  const xBoundaries = PatternGeometry.calculateCellBoundaries(columns, layout.activeWidthPx);
+  const yBoundaries = PatternGeometry.calculateCellBoundaries(rows, layout.activeHeightPx);
+  context.save();
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  cells.forEach((paletteIndex, index) => {
+    if (paletteIndex < 0) return;
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const width = xBoundaries[column + 1] - xBoundaries[column];
+    const height = yBoundaries[row + 1] - yBoundaries[row];
+    const symbol = symbols[paletteIndex];
+    const fontSize = Math.min(width, height) * (symbol.length > 1 ? .42 : .56);
+    context.font = `800 ${fontSize}px Arial, sans-serif`;
+    context.fillStyle = displayMode === 'symbol' ? '#211b29' : PatternSymbols.textColor(palette[paletteIndex]);
+    context.fillText(symbol, offsetX + (xBoundaries[column] + xBoundaries[column + 1]) / 2, offsetY + (yBoundaries[row] + yBoundaries[row + 1]) / 2 + fontSize * .04);
+  });
+  context.restore();
+}
+
 function renderPattern() {
   if (!generatedPattern) return;
   const { columns, rows, palette, cells, drillShape, transparencyMode } = generatedPattern;
   const cellSize = Number(document.querySelector('#previewZoom').value);
+  const showCoordinates = document.querySelector('#showCoordinates').checked;
+  const labelGutter = showCoordinates ? 44 : 0;
   const showGrid = document.querySelector('#showGrid').checked && cellSize >= 4;
   const output = document.querySelector('#patternCanvas');
-  output.width = columns * cellSize;
-  output.height = rows * cellSize;
+  output.width = columns * cellSize + labelGutter;
+  output.height = rows * cellSize + labelGutter;
   const context = output.getContext('2d');
   context.clearRect(0, 0, output.width, output.height);
+  if (showCoordinates) {
+    context.fillStyle = '#f1eaf8';
+    context.fillRect(0, 0, output.width, labelGutter);
+    context.fillRect(0, labelGutter, labelGutter, output.height - labelGutter);
+    context.fillStyle = '#6e548a';
+    context.font = '700 8px "DM Sans", sans-serif';
+    context.textAlign = 'center';
+    context.fillText('C / R', labelGutter / 2, labelGutter / 2 + 3);
+  }
   if (transparencyMode === 'fill') {
     context.fillStyle = drillShape === 'round' ? '#eeeaf0' : '#ffffff';
-    context.fillRect(0, 0, output.width, output.height);
+    context.fillRect(labelGutter, labelGutter, columns * cellSize, rows * cellSize);
   }
   cells.forEach((paletteIndex, index) => {
     if (paletteIndex === -1) return;
     const color = palette[paletteIndex];
-    const x = (index % columns) * cellSize;
-    const y = Math.floor(index / columns) * cellSize;
+    const x = labelGutter + (index % columns) * cellSize;
+    const y = labelGutter + Math.floor(index / columns) * cellSize;
     context.fillStyle = `rgb(${color.join(',')})`;
     if (drillShape === 'round') {
       context.beginPath();
-      context.arc(x + cellSize / 2, y + cellSize / 2, Math.max(.75, cellSize * .44), 0, Math.PI * 2);
+      context.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 2, 0, Math.PI * 2);
       context.fill();
       if (showGrid) {
         context.strokeStyle = 'rgba(35,30,45,.22)';
@@ -539,16 +663,426 @@ function renderPattern() {
       context.strokeRect(x + .5, y + .5, cellSize - 1, cellSize - 1);
     }
   });
+  context.strokeStyle = '#766b80';
+  context.lineWidth = 1;
+  context.strokeRect(labelGutter + .5, labelGutter + .5, columns * cellSize - 1, rows * cellSize - 1);
+  if (showCoordinates) drawGridCoordinates(context, { columns, rows, cellWidth: cellSize, cellHeight: cellSize, offsetX: labelGutter, offsetY: labelGutter, fontSize: 9, columnPrefix: 'C', rowPrefix: 'R', showTicks: true });
 }
+
+function refreshPatternCounts() {
+  if (!generatedPattern) return;
+  const summary = PatternEditor.countCells(generatedPattern.cells, generatedPattern.palette.length);
+  generatedPattern.counts = summary.counts;
+  generatedPattern.occupiedCells = summary.occupied;
+  document.querySelector('#editorOccupied').textContent = summary.occupied.toLocaleString();
+  document.querySelector('#editorEmpty').textContent = summary.empty.toLocaleString();
+  const occupiedStat = document.querySelector('[data-stat="occupied"]');
+  const emptyStat = document.querySelector('[data-stat="empty"]');
+  if (occupiedStat) occupiedStat.textContent = `${summary.occupied.toLocaleString()} drills`;
+  if (emptyStat) {
+    emptyStat.textContent = `${summary.empty.toLocaleString()} blank cells`;
+    emptyStat.hidden = summary.empty === 0;
+  }
+  document.querySelector('#patternPalette').innerHTML = generatedPattern.dmcAssignments.map((color, index) => `<span title="DMC ${color.code} · ${color.name} · ${summary.counts[index].toLocaleString()} drills"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><b>${color.code}</b><small>${summary.counts[index].toLocaleString()}</small></span>`).join('');
+}
+
+function renderEditorPalette() {
+  if (!generatedPattern) return;
+  const palette = document.querySelector('#editorPalette');
+  palette.innerHTML = generatedPattern.dmcAssignments.map((color, index) => `<button type="button" role="option" aria-selected="${index === editorPaletteIndex}" class="${index === editorPaletteIndex ? 'selected' : ''}" data-palette-index="${index}"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><span><b>DMC ${color.code}</b><small>${color.name} · ${generatedPattern.counts[index].toLocaleString()}</small></span></button>`).join('');
+  palette.querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
+    editorPaletteIndex = Number(button.dataset.paletteIndex);
+    editorTool = 'paint';
+    document.querySelectorAll('.editor-tool').forEach(tool => tool.classList.toggle('active', tool.dataset.tool === 'paint'));
+    renderEditorPalette();
+  }));
+}
+
+function renderEditor() {
+  if (!generatedPattern) return;
+  const { columns, rows, palette, cells, drillShape } = generatedPattern;
+  const cellSize = Number(document.querySelector('#editorZoom').value);
+  const gutter = 44;
+  const canvas = document.querySelector('#editorCanvas');
+  canvas.width = columns * cellSize + gutter;
+  canvas.height = rows * cellSize + gutter;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#f1eaf8';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#fff';
+  context.fillRect(gutter, gutter, columns * cellSize, rows * cellSize);
+  cells.forEach((paletteIndex, index) => {
+    if (paletteIndex < 0) return;
+    const x = gutter + (index % columns) * cellSize;
+    const y = gutter + Math.floor(index / columns) * cellSize;
+    context.fillStyle = `rgb(${palette[paletteIndex].join(',')})`;
+    if (drillShape === 'round') {
+      context.beginPath();
+      context.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 2, 0, Math.PI * 2);
+      context.fill();
+    } else context.fillRect(x, y, cellSize, cellSize);
+    context.strokeStyle = 'rgba(35,30,45,.18)';
+    context.strokeRect(x + .5, y + .5, cellSize - 1, cellSize - 1);
+  });
+  context.beginPath();
+  context.strokeStyle = 'rgba(35,30,45,.12)';
+  context.lineWidth = 1;
+  for (let column = 0; column <= columns; column += 1) {
+    const x = gutter + column * cellSize + .5;
+    context.moveTo(x, gutter);
+    context.lineTo(x, gutter + rows * cellSize);
+  }
+  for (let row = 0; row <= rows; row += 1) {
+    const y = gutter + row * cellSize + .5;
+    context.moveTo(gutter, y);
+    context.lineTo(gutter + columns * cellSize, y);
+  }
+  context.stroke();
+  context.strokeStyle = '#766b80';
+  context.strokeRect(gutter + .5, gutter + .5, columns * cellSize - 1, rows * cellSize - 1);
+  drawGridCoordinates(context, { columns, rows, cellWidth: cellSize, cellHeight: cellSize, offsetX: gutter, offsetY: gutter, fontSize: 9, columnPrefix: 'C', rowPrefix: 'R', showTicks: true });
+}
+
+function updateEditorHistoryButtons() {
+  document.querySelector('#undoEdit').disabled = editorUndoStack.length === 0;
+  document.querySelector('#redoEdit').disabled = editorRedoStack.length === 0;
+}
+
+function finishEditTransaction() {
+  if (!activeEditTransaction) return;
+  const changes = activeEditTransaction.filter(change => change.previousValue !== change.nextValue);
+  activeEditTransaction = null;
+  if (!changes.length) return;
+  editorUndoStack.push(changes);
+  editorRedoStack = [];
+  refreshPatternCounts();
+  renderEditorPalette();
+  renderPattern();
+  updateEditorHistoryButtons();
+}
+
+function editorCellFromPointer(event) {
+  const canvas = document.querySelector('#editorCanvas');
+  const bounds = canvas.getBoundingClientRect();
+  const x = (event.clientX - bounds.left) * canvas.width / bounds.width - 44;
+  const y = (event.clientY - bounds.top) * canvas.height / bounds.height - 44;
+  const cellSize = Number(document.querySelector('#editorZoom').value);
+  const column = Math.floor(x / cellSize);
+  const row = Math.floor(y / cellSize);
+  if (column < 0 || row < 0 || column >= generatedPattern.columns || row >= generatedPattern.rows) return -1;
+  return row * generatedPattern.columns + column;
+}
+
+function editCellAtPointer(event) {
+  const index = editorCellFromPointer(event);
+  if (index < 0) return;
+  if (editorTool === 'pick') {
+    const picked = generatedPattern.cells[index];
+    if (picked >= 0) {
+      editorPaletteIndex = picked;
+      editorTool = 'paint';
+      activeEditTransaction = null;
+      document.querySelectorAll('.editor-tool').forEach(tool => tool.classList.toggle('active', tool.dataset.tool === 'paint'));
+      renderEditorPalette();
+    }
+    return;
+  }
+  PatternEditor.changeCell(generatedPattern.cells, index, editorTool === 'erase' ? -1 : editorPaletteIndex, activeEditTransaction);
+  renderEditor();
+}
+
+document.querySelector('#openEditor').addEventListener('click', () => {
+  editorPaletteIndex = Math.max(0, generatedPattern.counts.indexOf(Math.max(...generatedPattern.counts)));
+  refreshPatternCounts();
+  renderEditorPalette();
+  renderEditor();
+  updateEditorHistoryButtons();
+  document.querySelector('#preflightPanel').hidden = true;
+  const panel = document.querySelector('#editorPanel');
+  panel.hidden = false;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+document.querySelector('#editorZoom').addEventListener('input', renderEditor);
+document.querySelectorAll('.editor-tool').forEach(button => button.addEventListener('click', () => {
+  editorTool = button.dataset.tool;
+  document.querySelectorAll('.editor-tool').forEach(tool => tool.classList.toggle('active', tool === button));
+}));
+const editorCanvas = document.querySelector('#editorCanvas');
+editorCanvas.addEventListener('pointerdown', event => {
+  activeEditTransaction = [];
+  editorCanvas.setPointerCapture(event.pointerId);
+  editCellAtPointer(event);
+});
+editorCanvas.addEventListener('pointermove', event => {
+  if (!activeEditTransaction || editorTool === 'pick') return;
+  editCellAtPointer(event);
+});
+editorCanvas.addEventListener('pointerup', finishEditTransaction);
+editorCanvas.addEventListener('pointercancel', finishEditTransaction);
+document.querySelector('#undoEdit').addEventListener('click', () => {
+  const transaction = editorUndoStack.pop();
+  if (!transaction) return;
+  PatternEditor.applyTransaction(generatedPattern.cells, transaction, 'undo');
+  editorRedoStack.push(transaction);
+  refreshPatternCounts(); renderEditorPalette(); renderEditor(); renderPattern(); updateEditorHistoryButtons();
+});
+document.querySelector('#redoEdit').addEventListener('click', () => {
+  const transaction = editorRedoStack.pop();
+  if (!transaction) return;
+  PatternEditor.applyTransaction(generatedPattern.cells, transaction, 'redo');
+  editorUndoStack.push(transaction);
+  refreshPatternCounts(); renderEditorPalette(); renderEditor(); renderPattern(); updateEditorHistoryButtons();
+});
 
 document.querySelector('#previewZoom').addEventListener('input', renderPattern);
 document.querySelector('#showGrid').addEventListener('change', renderPattern);
+document.querySelector('#showCoordinates').addEventListener('change', renderPattern);
 document.querySelector('#downloadPreview').addEventListener('click', () => {
   if (!generatedPattern) return;
   const link = document.createElement('a');
   link.download = 'diamond-pattern-preview.png';
   link.href = document.querySelector('#patternCanvas').toDataURL('image/png');
   link.click();
+});
+
+function currentPrintLayout() {
+  if (!generatedPattern) return null;
+  const { requestedWidthCm, requestedHeightCm, pitchMm } = generatedPattern.printLayout;
+  try {
+    return PatternGeometry.calculatePrintLayout(requestedWidthCm, requestedHeightCm, pitchMm, {
+      roundingMode: document.querySelector('#roundingMode').value,
+      printWidthIn: Number(document.querySelector('#printWidth').value),
+      printHeightIn: Number(document.querySelector('#printHeight').value),
+      dpi: Number(document.querySelector('#exportDpi').value),
+    });
+  } catch (_error) {
+    return null;
+  }
+}
+
+function updatePreflight() {
+  if (!generatedPattern) return;
+  const layout = currentPrintLayout();
+  if (!layout) {
+    const error = document.querySelector('#printError');
+    error.hidden = false;
+    error.textContent = 'Enter positive print dimensions and an export resolution.';
+    document.querySelector('#downloadPrint').disabled = true;
+    document.querySelector('#scalingStatus').textContent = '⚠ CHECK PRINT SETTINGS';
+    document.querySelector('#scalingStatus').classList.add('invalid');
+    return;
+  }
+  document.querySelector('#diamondAreaSummary').textContent = `${layout.exactWidthCm.toFixed(2)} × ${layout.exactHeightCm.toFixed(2)} cm`;
+  document.querySelector('#diamondInchesSummary').textContent = `${layout.exactWidthMm.toFixed(1)} × ${layout.exactHeightMm.toFixed(1)} mm · ${layout.exactWidthIn.toFixed(3)} × ${layout.exactHeightIn.toFixed(3)} in`;
+  document.querySelector('#drillGridSummary').textContent = `${layout.columns} × ${layout.rows} drills`;
+  document.querySelector('#pitchSummary').textContent = `${layout.pitchMm.toFixed(1)} mm edge-to-edge cell pitch · no added grid gap`;
+  document.querySelector('#gridLineSummary').textContent = `${layout.columns + 1} vertical × ${layout.rows + 1} horizontal boundary lines included`;
+  document.querySelector('#printFileSummary').textContent = `${layout.printWidthIn} × ${layout.printHeightIn} in · ${layout.dpi} DPI`;
+  document.querySelector('#pixelSummary').textContent = `${layout.canvasWidthPx.toLocaleString()} × ${layout.canvasHeightPx.toLocaleString()} px`;
+  document.querySelector('#marginSummary').textContent = `${Math.max(0, layout.marginXIn).toFixed(4)} in horizontal · ${Math.max(0, layout.marginYIn).toFixed(4)} in vertical`;
+  if (layout.compatible) {
+    const labels = PatternGeometry.calculatePrintLabelMetrics(layout.dpi, layout.marginXIn, layout.marginYIn, layout.activeWidthPx / layout.columns, layout.activeHeightPx / layout.rows);
+    document.querySelector('#coordinateSummary').textContent = `First, last, and every ${labels.columnInterval}th column / ${labels.rowInterval}th row · ${labels.fontSizePt.toFixed(1)} pt`;
+  } else document.querySelector('#coordinateSummary').textContent = 'Increase the print canvas to make room for labels.';
+  const error = document.querySelector('#printError');
+  error.hidden = layout.compatible;
+  error.textContent = layout.compatible ? '' : `Print size is too small. Use at least ${layout.recommendedWidthIn} × ${layout.recommendedHeightIn} inches.`;
+  document.querySelector('#downloadPrint').disabled = !layout.compatible;
+  const status = document.querySelector('#scalingStatus');
+  status.textContent = layout.compatible ? '✓ GRID SCALING LOCKED · 100%' : '⚠ PRINT AREA TOO SMALL';
+  status.classList.toggle('invalid', !layout.compatible);
+}
+
+document.querySelector('#continuePreflight').addEventListener('click', () => {
+  const layout = generatedPattern.printLayout;
+  document.querySelector('#printWidth').value = layout.recommendedWidthIn;
+  document.querySelector('#printHeight').value = layout.recommendedHeightIn;
+  const panel = document.querySelector('#preflightPanel');
+  panel.hidden = false;
+  updatePreflight();
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+document.querySelectorAll('#printWidth, #printHeight, #exportDpi').forEach(control => control.addEventListener('input', updatePreflight));
+document.querySelector('#useRecommendedPrint').addEventListener('click', () => {
+  const layout = generatedPattern.printLayout;
+  document.querySelector('#printWidth').value = layout.recommendedWidthIn;
+  document.querySelector('#printHeight').value = layout.recommendedHeightIn;
+  updatePreflight();
+});
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+async function pngWithDpi(blob, dpi) {
+  const png = new Uint8Array(await blob.arrayBuffer());
+  const pixelsPerMeter = Math.round(dpi / 0.0254);
+  const chunk = new Uint8Array(21);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, 9);
+  chunk.set([112, 72, 89, 115], 4);
+  view.setUint32(8, pixelsPerMeter);
+  view.setUint32(12, pixelsPerMeter);
+  chunk[16] = 1;
+  view.setUint32(17, crc32(chunk.slice(4, 17)));
+  const output = new Uint8Array(png.length + chunk.length);
+  output.set(png.slice(0, 33), 0);
+  output.set(chunk, 33);
+  output.set(png.slice(33), 54);
+  return new Blob([output], { type: 'image/png' });
+}
+
+async function downloadCanvasWithDpi(canvas, dpi, fileName) {
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('The browser could not create the requested PNG file.');
+  const taggedBlob = await pngWithDpi(blob, dpi);
+  const link = document.createElement('a');
+  link.download = fileName;
+  link.href = URL.createObjectURL(taggedBlob);
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function createLegendPages(dpi, overagePercent) {
+  const rows = PatternSymbols.legendRows(generatedPattern.dmcAssignments, generatedPattern.counts, generatedPattern.symbols, overagePercent);
+  const pageWidth = Math.round(8.5 * dpi);
+  const pageHeight = Math.round(11 * dpi);
+  const margin = Math.round(.35 * dpi);
+  const headerHeight = Math.round(.7 * dpi);
+  const footerHeight = Math.round(.25 * dpi);
+  const columnCount = 4;
+  const rowsPerColumn = 34;
+  const rowsPerPage = columnCount * rowsPerColumn;
+  const columnWidth = (pageWidth - margin * 2) / columnCount;
+  const rowHeight = (pageHeight - margin * 2 - headerHeight - footerHeight) / rowsPerColumn;
+  const pageCount = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+  return Array.from({ length: pageCount }, (_, pageIndex) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = pageWidth;
+    canvas.height = pageHeight;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, pageWidth, pageHeight);
+    context.fillStyle = '#29243d';
+    context.font = `700 ${dpi * 16 / 72}px Georgia, serif`;
+    context.fillText('Diamond Art · DMC Materials Legend', margin, margin + dpi * .18);
+    context.font = `400 ${dpi * 8 / 72}px Arial, sans-serif`;
+    context.fillStyle = '#70697a';
+    context.fillText(`${generatedPattern.columns} × ${generatedPattern.rows} drills · ${rows.length} colors · quantities ${overagePercent ? `include ${overagePercent}% overage` : 'are exact'}`, margin, margin + dpi * .42);
+    const pageRows = rows.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage);
+    pageRows.forEach((entry, index) => {
+      const column = Math.floor(index / rowsPerColumn);
+      const row = index % rowsPerColumn;
+      const x = margin + column * columnWidth;
+      const y = margin + headerHeight + row * rowHeight;
+      const swatchSize = rowHeight * .65;
+      context.fillStyle = `rgb(${entry.rgb.join(',')})`;
+      context.fillRect(x, y + (rowHeight - swatchSize) / 2, swatchSize, swatchSize);
+      context.strokeStyle = '#c8c1cc';
+      context.lineWidth = Math.max(1, dpi / 300);
+      context.strokeRect(x, y + (rowHeight - swatchSize) / 2, swatchSize, swatchSize);
+      context.fillStyle = PatternSymbols.textColor(entry.rgb);
+      context.font = `800 ${Math.min(swatchSize * .54, dpi * 8 / 72)}px Arial, sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(entry.symbol, x + swatchSize / 2, y + rowHeight / 2);
+      context.textAlign = 'left';
+      context.textBaseline = 'alphabetic';
+      context.fillStyle = '#29243d';
+      context.font = `700 ${dpi * 7 / 72}px Arial, sans-serif`;
+      context.fillText(`DMC ${entry.code}`, x + swatchSize + dpi * .04, y + rowHeight * .31, columnWidth - swatchSize - dpi * .08);
+      context.fillStyle = '#70697a';
+      context.font = `400 ${dpi * 5.5 / 72}px Arial, sans-serif`;
+      context.fillText(entry.name, x + swatchSize + dpi * .04, y + rowHeight * .57, columnWidth - swatchSize - dpi * .08);
+      const quantity = overagePercent ? `${entry.count.toLocaleString()} + ${overagePercent}% = ${entry.withOverage.toLocaleString()}` : `${entry.count.toLocaleString()} drills`;
+      context.fillText(quantity, x + swatchSize + dpi * .04, y + rowHeight * .82, columnWidth - swatchSize - dpi * .08);
+    });
+    context.fillStyle = '#8d8595';
+    context.font = `400 ${dpi * 6 / 72}px Arial, sans-serif`;
+    context.textAlign = 'right';
+    context.fillText(`Page ${pageIndex + 1} of ${pageCount}`, pageWidth - margin, pageHeight - margin / 2);
+    return canvas;
+  });
+}
+
+document.querySelector('#downloadPrint').addEventListener('click', async () => {
+  const layout = currentPrintLayout();
+  if (!layout?.compatible) return;
+  const button = document.querySelector('#downloadPrint');
+  button.disabled = true;
+  button.textContent = 'Preparing print file…';
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  try {
+    const output = document.createElement('canvas');
+    output.width = layout.canvasWidthPx;
+    output.height = layout.canvasHeightPx;
+    const context = output.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, output.width, output.height);
+    const offsetX = Math.round((output.width - layout.activeWidthPx) / 2);
+    const offsetY = Math.round((output.height - layout.activeHeightPx) / 2);
+    const { columns, rows, palette, cells, drillShape } = generatedPattern;
+    const displayMode = document.querySelector('#printCellDisplay').value;
+    cells.forEach((paletteIndex, index) => {
+      if (paletteIndex === -1) return;
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x1 = offsetX + Math.round(column * layout.activeWidthPx / columns);
+      const x2 = offsetX + Math.round((column + 1) * layout.activeWidthPx / columns);
+      const y1 = offsetY + Math.round(row * layout.activeHeightPx / rows);
+      const y2 = offsetY + Math.round((row + 1) * layout.activeHeightPx / rows);
+      context.fillStyle = displayMode === 'symbol' ? '#ffffff' : `rgb(${palette[paletteIndex].join(',')})`;
+      if (drillShape === 'round') {
+        context.beginPath();
+        context.ellipse((x1 + x2) / 2, (y1 + y2) / 2, (x2 - x1) / 2, (y2 - y1) / 2, 0, 0, Math.PI * 2);
+        context.fill();
+      } else context.fillRect(x1, y1, x2 - x1, y2 - y1);
+    });
+    drawPrintableGrid(context, layout, columns, rows, offsetX, offsetY);
+    drawPrintSymbols(context, layout, offsetX, offsetY, displayMode);
+    const cellWidth = layout.activeWidthPx / columns;
+    const cellHeight = layout.activeHeightPx / rows;
+    const coordinateMetrics = PatternGeometry.calculatePrintLabelMetrics(layout.dpi, layout.marginXIn, layout.marginYIn, layout.activeWidthPx / columns, layout.activeHeightPx / rows);
+    context.strokeStyle = '#51475d';
+    context.lineWidth = Math.max(1, layout.dpi / 300);
+    context.strokeRect(offsetX, offsetY, layout.activeWidthPx, layout.activeHeightPx);
+    drawGridCoordinates(context, { columns, rows, cellWidth, cellHeight, offsetX, offsetY, fontSize: coordinateMetrics.fontSize, columnPrefix: 'C', rowPrefix: 'R', showTicks: true, columnInterval: coordinateMetrics.columnInterval, rowInterval: coordinateMetrics.rowInterval });
+    await downloadCanvasWithDpi(output, layout.dpi, `diamond-pattern-${layout.printWidthIn}x${layout.printHeightIn}in-${layout.dpi}dpi.png`);
+  } catch (error) {
+    const message = document.querySelector('#printError');
+    message.hidden = false;
+    message.textContent = `Export failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'Download exact-scale pattern <span>↓</span>';
+  }
+});
+
+document.querySelector('#downloadLegend').addEventListener('click', async () => {
+  const button = document.querySelector('#downloadLegend');
+  const dpi = Number(document.querySelector('#exportDpi').value);
+  const overage = Number(document.querySelector('#legendOverage').value);
+  button.disabled = true;
+  button.textContent = 'Preparing materials legend…';
+  try {
+    const pages = createLegendPages(dpi, overage);
+    for (let index = 0; index < pages.length; index += 1) {
+      await downloadCanvasWithDpi(pages[index], dpi, `diamond-pattern-dmc-legend-page-${index + 1}.png`);
+      if (index < pages.length - 1) await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } catch (error) {
+    const message = document.querySelector('#printError');
+    message.hidden = false;
+    message.textContent = `Legend export failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'Download DMC materials legend <span>↓</span>';
+  }
 });
 
 document.querySelectorAll('.project-card').forEach(card => card.addEventListener('click', () => {
