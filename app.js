@@ -72,6 +72,24 @@ let editorPaletteIndex = 0;
 let editorUndoStack = [];
 let editorRedoStack = [];
 let activeEditTransaction = null;
+let currentProjectId = null;
+let currentProjectName = '';
+let currentSourceDataUrl = '';
+let currentProjectStage = 'editing';
+let projectSaveTimer = null;
+
+function newProjectId() {
+  return globalThis.crypto?.randomUUID?.() || `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function imageDataUrl(image) {
+  const output = document.createElement('canvas');
+  const scale = Math.min(1, 1600 / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+  output.width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+  output.height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+  output.getContext('2d').drawImage(image, 0, 0, output.width, output.height);
+  return output.toDataURL(sourceAsset?.hasTransparency ? 'image/png' : 'image/jpeg', .9);
+}
 
 function resolvedSamplingMode() {
   const choice = document.querySelector('#artworkSampling').value;
@@ -110,6 +128,10 @@ async function importArtwork(file) {
       selectedImage.onerror = () => reject(new Error('The validated preview could not be loaded.'));
       selectedImage.src = result.previewUrl;
     });
+    currentProjectId = null;
+    currentProjectName = result.fileName.replace(/\.[^.]+$/, '') || 'Untitled pattern';
+    currentSourceDataUrl = imageDataUrl(selectedImage);
+    generatedPattern = null;
     aspectRatio = result.width / result.height;
     document.querySelector('#sourceFrame').style.aspectRatio = `${result.width} / ${result.height}`;
     document.querySelector('#sourcePreview').src = result.previewUrl;
@@ -414,10 +436,99 @@ document.querySelector('#roundingMode').addEventListener('change', event => {
   document.querySelector('#roundingHelp').textContent = explanations[event.target.value];
 });
 document.querySelector('#replaceArtwork').addEventListener('click', () => input.click());
-document.querySelector('#backToProjects').addEventListener('click', () => {
+function relativeProjectTime(value) {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+  if (minutes < 1) return 'Saved just now';
+  if (minutes < 60) return `Saved ${minutes} min ago`;
+  if (minutes < 1440) return `Saved ${Math.round(minutes / 60)} hr ago`;
+  return `Saved ${new Date(value).toLocaleDateString()}`;
+}
+
+async function renderSavedProjects() {
+  const grid = document.querySelector('#projectGrid');
+  try {
+    const projects = await PatternProjects.list();
+    document.querySelector('#savedProjectCount').textContent = projects.length;
+    document.querySelector('#readyProjectCount').textContent = projects.filter(project => project.stage === 'preflight').length;
+    if (!projects.length) {
+      grid.innerHTML = '<p class="project-empty">No saved projects yet. Create a pattern to begin.</p>';
+      return;
+    }
+    grid.innerHTML = projects.map(project => `<article class="project-card saved-project" tabindex="0" data-project-id="${escapeMarkup(project.id)}"><div class="thumb saved-thumb" style="background-image:url('${project.thumbnail}')"><span class="status ${project.stage === 'preflight' ? 'ready' : 'editing'}"><i></i>${project.stage === 'preflight' ? 'Ready to export' : 'Editing'}</span><button type="button" class="delete-project" aria-label="Delete ${escapeMarkup(project.name)}">×</button></div><div class="project-info"><h3>${escapeMarkup(project.name)}</h3><p>${project.pattern.printLayout.exactWidthIn.toFixed(2)} × ${project.pattern.printLayout.exactHeightIn.toFixed(2)} in&nbsp; <b>•</b>&nbsp; ${project.pattern.dmcAssignments.length} colors</p><div><span>${relativeProjectTime(project.updatedAt)}</span><strong>${project.pattern.columns} × ${project.pattern.rows}</strong></div></div></article>`).join('');
+    grid.querySelectorAll('.saved-project').forEach(card => {
+      const open = () => restoreProject(card.dataset.projectId);
+      card.addEventListener('click', event => { if (!event.target.closest('.delete-project')) open(); });
+      card.addEventListener('keydown', event => { if (event.key === 'Enter') open(); });
+    });
+    grid.querySelectorAll('.delete-project').forEach(button => button.addEventListener('click', async event => {
+      event.stopPropagation();
+      if (!confirm('Delete this saved project from this browser?')) return;
+      await PatternProjects.remove(button.closest('.saved-project').dataset.projectId);
+      renderSavedProjects();
+    }));
+  } catch (error) {
+    grid.innerHTML = `<p class="project-empty">Saved projects unavailable: ${escapeMarkup(error.message)}</p>`;
+  }
+}
+
+async function restoreProject(id) {
+  const project = await PatternProjects.get(id);
+  if (!project) return;
+  currentProjectId = project.id;
+  currentProjectName = project.name;
+  currentProjectStage = project.stage || 'editing';
+  currentSourceDataUrl = project.sourceDataUrl || '';
+  sourceAsset = project.sourceAsset;
+  if (sourceAsset) sourceAsset.previewUrl = currentSourceDataUrl;
+  imageAnalysis = project.imageAnalysis;
+  backgroundSelection = project.backgroundSelection;
+  generatedPattern = project.pattern;
+  Object.entries(project.settings || {}).forEach(([id, value]) => {
+    const control = document.querySelector(`#${id}`);
+    if (control) control.value = value;
+  });
+  if (project.settings?.transparencyMode) {
+    const transparency = document.querySelector(`input[name="transparencyMode"][value="${project.settings.transparencyMode}"]`);
+    if (transparency) transparency.checked = true;
+  }
+  if (project.settings?.vendors) document.querySelectorAll('.vendor-choice').forEach(choice => { choice.checked = project.settings.vendors.includes(choice.value); });
+  if (typeof project.settings?.lockRatio === 'boolean') document.querySelector('#lockRatio').checked = project.settings.lockRatio;
+  if (currentSourceDataUrl) {
+    selectedImage = new Image();
+    await new Promise((resolve, reject) => { selectedImage.onload = resolve; selectedImage.onerror = reject; selectedImage.src = currentSourceDataUrl; });
+    aspectRatio = selectedImage.width / selectedImage.height;
+    document.querySelector('#sourcePreview').src = currentSourceDataUrl;
+    document.querySelector('#sourceFrame').style.aspectRatio = `${selectedImage.width} / ${selectedImage.height}`;
+  }
+  document.querySelector('#sourceName').textContent = sourceAsset?.fileName || project.name;
+  document.querySelector('#sourceDimensions').textContent = sourceAsset ? `${sourceAsset.width} × ${sourceAsset.height} px` : '—';
+  document.querySelector('#sourceFormat').textContent = sourceAsset?.format || '—';
+  document.querySelector('#sourceMeta').textContent = 'Reopened from local project storage';
+  document.querySelector('#dashboardView').hidden = true;
+  document.querySelector('#setupView').hidden = false;
+  document.querySelector('header').hidden = true;
+  document.querySelector('#patternResult').hidden = false;
+  document.querySelector('#editorPanel').hidden = currentProjectStage === 'setup';
+  document.querySelector('#preflightPanel').hidden = currentProjectStage !== 'preflight';
+  document.querySelector('#patternStats').innerHTML = `<strong>${generatedPattern.columns} × ${generatedPattern.rows}</strong><span data-stat="occupied">${generatedPattern.occupiedCells.toLocaleString()} drills</span><span data-stat="empty" ${(generatedPattern.columns * generatedPattern.rows - generatedPattern.occupiedCells) === 0 ? 'hidden' : ''}>${(generatedPattern.columns * generatedPattern.rows - generatedPattern.occupiedCells).toLocaleString()} blank cells</span><span>${generatedPattern.palette.length} colors</span><span>${generatedPattern.drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
+  renderPattern();
+  refreshPatternCounts();
+  editorPaletteIndex = Math.max(0, generatedPattern.counts.indexOf(Math.max(...generatedPattern.counts)));
+  renderEditorPalette();
+  updateMaterialEditor();
+  renderEditor();
+  document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${generatedPattern.vendors.map(vendor => `<span>${escapeMarkup(vendor)}</span>`).join('')}`;
+  if (currentProjectStage === 'preflight') updatePreflight();
+  document.querySelector('#projectSaveStatus').textContent = `Saved locally · ${relativeProjectTime(project.updatedAt).replace('Saved ', '')}`;
+  document.querySelector('#editorPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.querySelector('#backToProjects').addEventListener('click', async () => {
+  if (generatedPattern) await saveCurrentProject(currentProjectStage);
   document.querySelector('#setupView').hidden = true;
   document.querySelector('#dashboardView').hidden = false;
   document.querySelector('header').hidden = false;
+  await renderSavedProjects();
 });
 document.querySelector('#generatePattern').addEventListener('click', async () => {
   if (!selectedImage) return;
@@ -527,6 +638,7 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   result.hidden = false;
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.querySelector('#setupWarning').textContent = `ⓘ Keep the ${printLayout.exactWidthIn.toFixed(2)} × ${printLayout.exactHeightIn.toFixed(2)} in diamond area exact; use a ${printLayout.recommendedWidthIn} × ${printLayout.recommendedHeightIn} in print file.`;
+  scheduleProjectSave('editing');
   } catch (error) {
     console.error('Pattern generation failed:', error);
     document.querySelector('#setupWarning').textContent = `⚠ Pattern generation failed: ${error.message}`;
@@ -691,6 +803,75 @@ function escapeMarkup(value) {
   return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 }
 
+function projectThumbnail() {
+  if (!generatedPattern) return '';
+  const thumbnail = document.createElement('canvas');
+  thumbnail.width = 320;
+  thumbnail.height = 200;
+  const context = thumbnail.getContext('2d');
+  context.fillStyle = '#f3f0f5';
+  context.fillRect(0, 0, thumbnail.width, thumbnail.height);
+  const scale = Math.min(thumbnail.width / generatedPattern.columns, thumbnail.height / generatedPattern.rows);
+  const width = generatedPattern.columns * scale;
+  const height = generatedPattern.rows * scale;
+  const offsetX = (thumbnail.width - width) / 2;
+  const offsetY = (thumbnail.height - height) / 2;
+  generatedPattern.cells.forEach((paletteIndex, index) => {
+    if (paletteIndex < 0) return;
+    const column = index % generatedPattern.columns;
+    const row = Math.floor(index / generatedPattern.columns);
+    context.fillStyle = `rgb(${generatedPattern.palette[paletteIndex].join(',')})`;
+    context.fillRect(offsetX + column * scale, offsetY + row * scale, Math.max(1, scale + .2), Math.max(1, scale + .2));
+  });
+  return thumbnail.toDataURL('image/jpeg', .82);
+}
+
+function captureProjectSettings() {
+  const selectors = ['targetWidth', 'targetHeight', 'drillProfile', 'roundingMode', 'maxColors', 'cleanupStrength', 'artworkSampling', 'artworkColorCleanup', 'backgroundTreatment', 'backgroundTolerance', 'backgroundShadeCount', 'backgroundShadeSource', 'backgroundDarkColor', 'backgroundLightColor', 'solidBackgroundColor', 'solidBackgroundStyle', 'backgroundColor', 'opacityThreshold', 'printWidth', 'printHeight', 'exportDpi', 'printCellDisplay', 'cropZoom', 'cropX', 'cropY'];
+  return {
+    ...Object.fromEntries(selectors.map(id => [id, document.querySelector(`#${id}`).value])),
+    transparencyMode: document.querySelector('input[name="transparencyMode"]:checked')?.value || 'fill',
+    vendors: [...document.querySelectorAll('.vendor-choice:checked')].map(choice => choice.value),
+    lockRatio: document.querySelector('#lockRatio').checked,
+  };
+}
+
+async function saveCurrentProject(stage = currentProjectStage) {
+  if (!generatedPattern) return;
+  currentProjectId ||= newProjectId();
+  currentProjectStage = stage;
+  const status = document.querySelector('#projectSaveStatus');
+  if (status) status.textContent = 'Saving…';
+  try {
+    const existing = await PatternProjects.get(currentProjectId).catch(() => null);
+    await PatternProjects.save({
+      id: currentProjectId,
+      name: currentProjectName || sourceAsset?.fileName?.replace(/\.[^.]+$/, '') || 'Untitled pattern',
+      createdAt: existing?.createdAt,
+      updatedAt: new Date().toISOString(),
+      stage,
+      thumbnail: projectThumbnail(),
+      sourceDataUrl: currentSourceDataUrl,
+      sourceAsset: sourceAsset ? { ...sourceAsset, previewUrl: '' } : null,
+      imageAnalysis,
+      backgroundSelection,
+      settings: captureProjectSettings(),
+      pattern: generatedPattern,
+    });
+    if (status) status.textContent = `Saved locally at ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  } catch (error) {
+    if (status) status.textContent = `Save failed: ${error.message}`;
+  }
+}
+
+function scheduleProjectSave(stage = currentProjectStage) {
+  currentProjectStage = stage;
+  clearTimeout(projectSaveTimer);
+  const status = document.querySelector('#projectSaveStatus');
+  if (status) status.textContent = 'Unsaved changes';
+  projectSaveTimer = setTimeout(() => saveCurrentProject(stage), 500);
+}
+
 function renderEditorPalette() {
   if (!generatedPattern) return;
   const palette = document.querySelector('#editorPalette');
@@ -781,6 +962,7 @@ function finishEditTransaction() {
   renderEditorPalette();
   renderPattern();
   updateEditorHistoryButtons();
+  scheduleProjectSave('editing');
 }
 
 function editorCellFromPointer(event) {
@@ -833,6 +1015,7 @@ document.querySelector('#editorSymbol').addEventListener('change', event => {
     error.hidden = true;
     renderEditorPalette();
     renderEditor();
+    scheduleProjectSave('editing');
   } catch (exception) {
     error.textContent = exception.message;
     error.hidden = false;
@@ -844,10 +1027,12 @@ document.querySelector('#editorMaterialType').addEventListener('change', event =
   if (event.target.value === 'standard') generatedPattern.materials[editorPaletteIndex].label = '';
   updateMaterialEditor();
   renderEditorPalette();
+  scheduleProjectSave('editing');
 });
 document.querySelector('#editorMaterialLabel').addEventListener('input', event => {
   generatedPattern.materials[editorPaletteIndex].label = event.target.value.trim();
   renderEditorPalette();
+  scheduleProjectSave('editing');
 });
 document.querySelectorAll('.editor-tool').forEach(button => button.addEventListener('click', () => {
   editorTool = button.dataset.tool;
@@ -871,6 +1056,7 @@ document.querySelector('#undoEdit').addEventListener('click', () => {
   PatternEditor.applyTransaction(generatedPattern.cells, transaction, 'undo');
   editorRedoStack.push(transaction);
   refreshPatternCounts(); renderEditorPalette(); renderEditor(); renderPattern(); updateEditorHistoryButtons();
+  scheduleProjectSave('editing');
 });
 document.querySelector('#redoEdit').addEventListener('click', () => {
   const transaction = editorRedoStack.pop();
@@ -878,6 +1064,7 @@ document.querySelector('#redoEdit').addEventListener('click', () => {
   PatternEditor.applyTransaction(generatedPattern.cells, transaction, 'redo');
   editorUndoStack.push(transaction);
   refreshPatternCounts(); renderEditorPalette(); renderEditor(); renderPattern(); updateEditorHistoryButtons();
+  scheduleProjectSave('editing');
 });
 
 document.querySelector('#previewZoom').addEventListener('input', renderPattern);
@@ -947,13 +1134,16 @@ document.querySelector('#continuePreflight').addEventListener('click', () => {
   panel.hidden = false;
   updatePreflight();
   panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  scheduleProjectSave('preflight');
 });
-document.querySelectorAll('#printWidth, #printHeight, #exportDpi').forEach(control => control.addEventListener('input', updatePreflight));
+document.querySelectorAll('#printWidth, #printHeight, #exportDpi, #printCellDisplay').forEach(control => control.addEventListener('input', () => { updatePreflight(); scheduleProjectSave('preflight'); }));
+document.querySelector('#saveProject').addEventListener('click', () => saveCurrentProject(currentProjectStage));
 document.querySelector('#useRecommendedPrint').addEventListener('click', () => {
   const layout = generatedPattern.printLayout;
   document.querySelector('#printWidth').value = layout.recommendedWidthIn;
   document.querySelector('#printHeight').value = layout.recommendedHeightIn;
   updatePreflight();
+  scheduleProjectSave('preflight');
 });
 
 function crc32(bytes) {
@@ -1183,6 +1373,4 @@ document.querySelector('#downloadLegend').addEventListener('click', async () => 
   }
 });
 
-document.querySelectorAll('.project-card').forEach(card => card.addEventListener('click', () => {
-  card.animate([{ transform: 'translateY(-3px)' }, { transform: 'translateY(-3px) scale(.99)' }, { transform: 'translateY(-3px)' }], { duration: 240 });
-}));
+renderSavedProjects();
