@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { calculateCropRegion } = require('../geometry.js');
+const { calculateCellBoundaries, calculateCropRegion, calculateLabelInterval, calculateLabelPositions, calculatePrintLabelMetrics, calculatePrintLayout, calculateSizeTiers } = require('../geometry.js');
 
 function close(actual, expected) {
   assert.ok(Math.abs(actual - expected) < 0.0001, `${actual} should equal ${expected}`);
@@ -21,5 +21,69 @@ close(zoomed.width, 500);
 close(zoomed.height, 500);
 close(zoomed.x, 250);
 close(zoomed.y, 250);
+
+const printLayout = calculatePrintLayout(30, 40, 2.5, { dpi: 300 });
+assert.equal(printLayout.columns, 120);
+assert.equal(printLayout.rows, 160);
+close(printLayout.exactWidthIn, 300 / 25.4);
+close(printLayout.exactHeightIn, 400 / 25.4);
+assert.equal(printLayout.recommendedWidthIn, 12);
+assert.equal(printLayout.recommendedHeightIn, 16);
+assert.equal(printLayout.canvasWidthPx, 3600);
+assert.equal(printLayout.canvasHeightPx, 4800);
+assert.equal(printLayout.compatible, true);
+close(printLayout.marginXIn, (12 - 300 / 25.4) / 2);
+
+const incompatible = calculatePrintLayout(30, 40, 2.5, { printWidthIn: 11, printHeightIn: 16 });
+assert.equal(incompatible.compatible, false);
+assert.ok(incompatible.marginXIn < 0);
+
+const decimalInches = calculatePrintLayout(42.5, 42.5, 2.5);
+assert.equal(decimalInches.columns, 170);
+assert.equal(decimalInches.rows, 170);
+close(decimalInches.exactWidthIn, 425 / 25.4);
+assert.equal(decimalInches.recommendedWidthIn, 17, 'A 16.73-inch diamond area needs a 17-inch print file.');
+assert.equal(decimalInches.recommendedHeightIn, 17);
+
+const rounded = calculatePrintLayout(30, 40, 2.8, { roundingMode: 'floor', dpi: 150 });
+assert.equal(rounded.columns, 107);
+assert.equal(rounded.rows, 142);
+assert.equal(rounded.activeWidthPx, Math.round(107 * 2.8 / 25.4 * 150));
+assert.throws(() => calculatePrintLayout(30, 40, 0), /positive/);
+
+const squareTiers = calculateSizeTiers(170, 1, 2.5);
+assert.deepEqual(squareTiers.map(tier => [tier.columns, tier.rows]), [[150, 150], [170, 170], [190, 190]]);
+assert.deepEqual(squareTiers.map(tier => tier.widthCm), [37.5, 42.5, 47.5]);
+
+const largeDrillTiers = calculateSizeTiers(170, 1, 2.8);
+assert.deepEqual(largeDrillTiers.map(tier => Number(tier.widthCm.toFixed(1))), [42, 47.6, 53.2]);
+
+const portraitTiers = calculateSizeTiers(100, 3 / 4, 2.5);
+assert.deepEqual(portraitTiers.map(tier => [tier.columns, tier.rows]), [[80, 107], [100, 134], [120, 160]]);
+assert.throws(() => calculateSizeTiers(170, 1, 0), /positive/);
+
+assert.equal(calculateLabelInterval(4), 10);
+assert.equal(calculateLabelInterval(12), 2);
+assert.equal(calculateLabelInterval(30), 1);
+assert.throws(() => calculateLabelInterval(0), /positive/);
+
+const printLabels = calculatePrintLabelMetrics(300, 0.5, 0.5, 29.53, 29.53);
+close(printLabels.fontSizePt, 8);
+assert.equal(printLabels.columnInterval, 5);
+assert.equal(printLabels.rowInterval, 5);
+const tightPrintLabels = calculatePrintLabelMetrics(300, 0.08, 0.08, 29.53, 29.53);
+assert.ok(tightPrintLabels.fontSizePt >= 2.5);
+assert.throws(() => calculatePrintLabelMetrics(300, 0, 0.5, 30, 30), /positive/);
+assert.deepEqual(calculateLabelPositions(254, 5).slice(0, 4), [1, 5, 10, 15]);
+assert.deepEqual(calculateLabelPositions(254, 5).slice(-2), [250, 254]);
+assert.deepEqual(calculateLabelPositions(10, 5), [1, 5, 10]);
+assert.throws(() => calculateLabelPositions(10, 0), /positive whole/);
+assert.deepEqual(calculateCellBoundaries(4, 10), [0, 3, 5, 8, 10]);
+const printGridBoundaries = calculateCellBoundaries(254, 7500);
+assert.equal(printGridBoundaries.length, 255);
+assert.equal(printGridBoundaries[0], 0);
+assert.equal(printGridBoundaries.at(-1), 7500);
+assert.ok(printGridBoundaries.every((boundary, index) => index === 0 || boundary > printGridBoundaries[index - 1]), 'Every cell must begin where the previous cell ends, without a gap.');
+assert.throws(() => calculateCellBoundaries(0, 100), /positive cell count/);
 
 console.log('crop geometry tests passed');
