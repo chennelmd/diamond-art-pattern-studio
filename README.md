@@ -46,7 +46,7 @@ python server.py
 
 Then open `http://localhost:4173`.
 
-The current interface shows `Build 2026.10.07` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
+The current interface shows `Build 2026.10.11` in the footer. If that build label or the highlighted **Preview appearance** card is missing, the server is running an older checkout; update the project files before restarting it. The local server disables caching for the page so a refresh loads the current interface.
 
 ## Choosing a pattern size
 
@@ -75,7 +75,7 @@ Choosing an option immediately updates the Width and Height fields. You can stil
 - Numbered column and row coordinates outside the top and left edges of preview and print grids, including the first and last cell plus evenly spaced round-number landmarks
 - A high-contrast printable boundary around every drill cell across the complete active diamond area
 - Grid boundaries overlay shared cell edges and do not consume physical drill space; round drill marks reach the cell edges and square drills fill the full cell
-- Deterministic, rotation-safe symbols printed inside occupied cells, without opposing directional pairs that become confusing when a canvas is turned upside down
+- Deterministic, rotation-safe symbols printed inside occupied cells, without opposing directional pairs, duplicate X/plus shapes, or similar single forward/backward slashes
 - A separate letter-size DMC materials legend with a pattern thumbnail, project specifications, swatches, symbols, DMC codes and names, and the exact drill count for every individual color
 - Shape-accurate round and square drill rendering with explained whole-cell rounding choices
 - Exact-scale professional print preflight with centimeter-based sizing, whole-inch canvas recommendations, centered margins, DPI metadata, undersized-canvas protection, and PNG export
@@ -83,8 +83,16 @@ Choosing an option immediately updates the Width and Height fields. You can stil
 - Non-destructive crop positioning and configurable transparent-PNG background flattening
 - Conversion-stage confetti cleanup that is completed before manual pattern editing
 - Step 3 cell editor with paint, erase, eyedropper, drag editing, live drill counts, and stroke-level undo/redo
+- Editable per-color print symbols and specialty-drill replacements for AB, crystal, fairy-dust, metallic, glow, and supplier-specific names or codes
+- IndexedDB project saving with autosave, final-pattern thumbnails, real dashboard cards, reopening, and deletion
 - Transparent-region modes for full-drill fill, empty partial-drill areas, or later selective editing
 - Fully local static assets and application behavior
+
+## Tests
+
+Run the server tests with `.venv/bin/python -m unittest discover -s tests -v` and the JavaScript tests with `node --test tests/*.test.js`.
+
+The project history browser regression requires the `playwright` Node package and its Chromium browser to be available. With the local server running, run `node tests/project-history.browser.cjs`. It uses an isolated browser context and checks undo/redo isolation when switching saved projects. Set `DIAMOND_TEST_URL` for a different server address or `CHROMIUM_PATH` for an existing Chromium executable.
 
 ## DMC color reference
 

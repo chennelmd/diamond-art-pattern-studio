@@ -72,6 +72,24 @@ let editorPaletteIndex = 0;
 let editorUndoStack = [];
 let editorRedoStack = [];
 let activeEditTransaction = null;
+let currentProjectId = null;
+let currentProjectName = '';
+let currentSourceDataUrl = '';
+let currentProjectStage = 'editing';
+let projectSaveTimer = null;
+
+function newProjectId() {
+  return globalThis.crypto?.randomUUID?.() || `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function imageDataUrl(image) {
+  const output = document.createElement('canvas');
+  const scale = Math.min(1, 1600 / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+  output.width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+  output.height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+  output.getContext('2d').drawImage(image, 0, 0, output.width, output.height);
+  return output.toDataURL(sourceAsset?.hasTransparency ? 'image/png' : 'image/jpeg', .9);
+}
 
 function resolvedSamplingMode() {
   const choice = document.querySelector('#artworkSampling').value;
@@ -110,6 +128,10 @@ async function importArtwork(file) {
       selectedImage.onerror = () => reject(new Error('The validated preview could not be loaded.'));
       selectedImage.src = result.previewUrl;
     });
+    currentProjectId = null;
+    currentProjectName = result.fileName.replace(/\.[^.]+$/, '') || 'Untitled pattern';
+    currentSourceDataUrl = imageDataUrl(selectedImage);
+    generatedPattern = null;
     aspectRatio = result.width / result.height;
     document.querySelector('#sourceFrame').style.aspectRatio = `${result.width} / ${result.height}`;
     document.querySelector('#sourcePreview').src = result.previewUrl;
@@ -414,17 +436,106 @@ document.querySelector('#roundingMode').addEventListener('change', event => {
   document.querySelector('#roundingHelp').textContent = explanations[event.target.value];
 });
 document.querySelector('#replaceArtwork').addEventListener('click', () => input.click());
-document.querySelector('#backToProjects').addEventListener('click', () => {
+function relativeProjectTime(value) {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+  if (minutes < 1) return 'Saved just now';
+  if (minutes < 60) return `Saved ${minutes} min ago`;
+  if (minutes < 1440) return `Saved ${Math.round(minutes / 60)} hr ago`;
+  return `Saved ${new Date(value).toLocaleDateString()}`;
+}
+
+async function renderSavedProjects() {
+  const grid = document.querySelector('#projectGrid');
+  try {
+    const projects = await PatternProjects.list();
+    document.querySelector('#savedProjectCount').textContent = projects.length;
+    document.querySelector('#readyProjectCount').textContent = projects.filter(project => project.stage === 'preflight').length;
+    if (!projects.length) {
+      grid.innerHTML = '<p class="project-empty">No saved projects yet. Create a pattern to begin.</p>';
+      return;
+    }
+    grid.innerHTML = projects.map(project => `<article class="project-card saved-project" tabindex="0" data-project-id="${escapeMarkup(project.id)}"><div class="thumb saved-thumb" style="background-image:url('${project.thumbnail}')"><span class="status ${project.stage === 'preflight' ? 'ready' : 'editing'}"><i></i>${project.stage === 'preflight' ? 'Ready to export' : 'Editing'}</span><button type="button" class="delete-project" aria-label="Delete ${escapeMarkup(project.name)}">×</button></div><div class="project-info"><h3>${escapeMarkup(project.name)}</h3><p>${project.pattern.printLayout.exactWidthIn.toFixed(2)} × ${project.pattern.printLayout.exactHeightIn.toFixed(2)} in&nbsp; <b>•</b>&nbsp; ${project.pattern.dmcAssignments.length} colors</p><div><span>${relativeProjectTime(project.updatedAt)}</span><strong>${project.pattern.columns} × ${project.pattern.rows}</strong></div></div></article>`).join('');
+    grid.querySelectorAll('.saved-project').forEach(card => {
+      const open = () => restoreProject(card.dataset.projectId);
+      card.addEventListener('click', event => { if (!event.target.closest('.delete-project')) open(); });
+      card.addEventListener('keydown', event => { if (event.key === 'Enter') open(); });
+    });
+    grid.querySelectorAll('.delete-project').forEach(button => button.addEventListener('click', async event => {
+      event.stopPropagation();
+      if (!confirm('Delete this saved project from this browser?')) return;
+      await PatternProjects.remove(button.closest('.saved-project').dataset.projectId);
+      renderSavedProjects();
+    }));
+  } catch (error) {
+    grid.innerHTML = `<p class="project-empty">Saved projects unavailable: ${escapeMarkup(error.message)}</p>`;
+  }
+}
+
+async function restoreProject(id) {
+  const project = await PatternProjects.get(id);
+  if (!project) return;
+  resetEditorHistory();
+  currentProjectId = project.id;
+  currentProjectName = project.name;
+  currentProjectStage = project.stage || 'editing';
+  currentSourceDataUrl = project.sourceDataUrl || '';
+  sourceAsset = project.sourceAsset;
+  if (sourceAsset) sourceAsset.previewUrl = currentSourceDataUrl;
+  imageAnalysis = project.imageAnalysis;
+  backgroundSelection = project.backgroundSelection;
+  generatedPattern = project.pattern;
+  Object.entries(project.settings || {}).forEach(([id, value]) => {
+    const control = document.querySelector(`#${id}`);
+    if (control) control.value = value;
+  });
+  if (project.settings?.transparencyMode) {
+    const transparency = document.querySelector(`input[name="transparencyMode"][value="${project.settings.transparencyMode}"]`);
+    if (transparency) transparency.checked = true;
+  }
+  if (project.settings?.vendors) document.querySelectorAll('.vendor-choice').forEach(choice => { choice.checked = project.settings.vendors.includes(choice.value); });
+  if (typeof project.settings?.lockRatio === 'boolean') document.querySelector('#lockRatio').checked = project.settings.lockRatio;
+  if (currentSourceDataUrl) {
+    selectedImage = new Image();
+    await new Promise((resolve, reject) => { selectedImage.onload = resolve; selectedImage.onerror = reject; selectedImage.src = currentSourceDataUrl; });
+    aspectRatio = selectedImage.width / selectedImage.height;
+    document.querySelector('#sourcePreview').src = currentSourceDataUrl;
+    document.querySelector('#sourceFrame').style.aspectRatio = `${selectedImage.width} / ${selectedImage.height}`;
+  }
+  document.querySelector('#sourceName').textContent = sourceAsset?.fileName || project.name;
+  document.querySelector('#sourceDimensions').textContent = sourceAsset ? `${sourceAsset.width} × ${sourceAsset.height} px` : '—';
+  document.querySelector('#sourceFormat').textContent = sourceAsset?.format || '—';
+  document.querySelector('#sourceMeta').textContent = 'Reopened from local project storage';
+  document.querySelector('#dashboardView').hidden = true;
+  document.querySelector('#setupView').hidden = false;
+  document.querySelector('header').hidden = true;
+  document.querySelector('#patternResult').hidden = false;
+  document.querySelector('#editorPanel').hidden = currentProjectStage === 'setup';
+  document.querySelector('#preflightPanel').hidden = currentProjectStage !== 'preflight';
+  document.querySelector('#patternStats').innerHTML = `<strong>${generatedPattern.columns} × ${generatedPattern.rows}</strong><span data-stat="occupied">${generatedPattern.occupiedCells.toLocaleString()} drills</span><span data-stat="empty" ${(generatedPattern.columns * generatedPattern.rows - generatedPattern.occupiedCells) === 0 ? 'hidden' : ''}>${(generatedPattern.columns * generatedPattern.rows - generatedPattern.occupiedCells).toLocaleString()} blank cells</span><span>${generatedPattern.palette.length} colors</span><span>${generatedPattern.drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
+  renderPattern();
+  refreshPatternCounts();
+  editorPaletteIndex = Math.max(0, generatedPattern.counts.indexOf(Math.max(...generatedPattern.counts)));
+  renderEditorPalette();
+  updateMaterialEditor();
+  renderEditor();
+  document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${generatedPattern.vendors.map(vendor => `<span>${escapeMarkup(vendor)}</span>`).join('')}`;
+  if (currentProjectStage === 'preflight') updatePreflight();
+  document.querySelector('#projectSaveStatus').textContent = `Saved locally · ${relativeProjectTime(project.updatedAt).replace('Saved ', '')}`;
+  document.querySelector('#editorPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.querySelector('#backToProjects').addEventListener('click', async () => {
+  if (generatedPattern) await saveCurrentProject(currentProjectStage);
   document.querySelector('#setupView').hidden = true;
   document.querySelector('#dashboardView').hidden = false;
   document.querySelector('header').hidden = false;
+  await renderSavedProjects();
 });
 document.querySelector('#generatePattern').addEventListener('click', async () => {
   if (!selectedImage) return;
   document.querySelector('#editorPanel').hidden = true;
   document.querySelector('#preflightPanel').hidden = true;
-  editorUndoStack = [];
-  editorRedoStack = [];
+  resetEditorHistory();
   const vendors = [...document.querySelectorAll('.vendor-choice:checked')].map(choice => choice.value);
   const vendorError = document.querySelector('#vendorError');
   vendorError.hidden = vendors.length > 0;
@@ -517,7 +628,8 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   const occupiedCells = cells.filter(color => color !== -1).length;
   const treatedBackgroundCells = backgroundMask ? backgroundMask.reduce((total, selected) => total + selected, 0) : 0;
   const symbols = PatternSymbols.assignSymbols(dmcAssignments.length);
-  generatedPattern = { columns, rows, palette, dmcAssignments, symbols, cells, counts, vendors, drillShape, printLayout, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', samplingMode, backgroundMode, treatedBackgroundCells };
+  const materials = dmcAssignments.map(() => ({ type: 'standard', label: '' }));
+  generatedPattern = { columns, rows, palette, dmcAssignments, symbols, materials, cells, counts, vendors, drillShape, printLayout, cleanupStrength, cleanedCells: cleanup.changed, rareColorsMerged: consolidation.removedColors, flatColorsMerged: Math.max(0, flatColorCleanup.colorsBefore - flatColorCleanup.colorsAfter), transparencyMode, occupiedCells, artworkType: sourceAsset?.artworkType || 'photo', samplingMode, backgroundMode, treatedBackgroundCells };
   renderPattern();
   document.querySelector('#patternStats').innerHTML = `<strong>${columns} × ${rows}</strong><span data-stat="occupied">${occupiedCells.toLocaleString()} drills</span><span data-stat="empty" ${occupiedCells === columns * rows ? 'hidden' : ''}>${(columns * rows - occupiedCells).toLocaleString()} blank cells</span><span>${palette.length} colors</span><span>${cleanup.changed.toLocaleString()} cells cleaned</span>${flatColorCleanup.changedCells ? `<span>${flatColorCleanup.changedCells.toLocaleString()} flat-color cells cleaned</span>` : ''}${consolidation.removedColors ? `<span>${consolidation.removedColors.toLocaleString()} rare colors merged</span>` : ''}${backgroundMode !== 'preserve' ? `<span>${treatedBackgroundCells.toLocaleString()} background cells treated</span>` : ''}<span>${illustrationMode ? 'Crisp illustration' : 'Smooth photo'} sampling</span><span>${drillShape === 'round' ? 'Round' : 'Square'} drills</span>`;
   document.querySelector('#patternVendors').innerHTML = `<small>VENDORS</small>${vendors.map(vendor => `<span>${vendor}</span>`).join('')}`;
@@ -526,6 +638,7 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   result.hidden = false;
   result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.querySelector('#setupWarning').textContent = `ⓘ Keep the ${printLayout.exactWidthIn.toFixed(2)} × ${printLayout.exactHeightIn.toFixed(2)} in diamond area exact; use a ${printLayout.recommendedWidthIn} × ${printLayout.recommendedHeightIn} in print file.`;
+  scheduleProjectSave('editing');
   } catch (error) {
     console.error('Pattern generation failed:', error);
     document.querySelector('#setupWarning').textContent = `⚠ Pattern generation failed: ${error.message}`;
@@ -686,16 +799,106 @@ function refreshPatternCounts() {
   document.querySelector('#patternPalette').innerHTML = generatedPattern.dmcAssignments.map((color, index) => `<span title="DMC ${color.code} · ${color.name} · ${summary.counts[index].toLocaleString()} drills"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><b>${color.code}</b><small>${summary.counts[index].toLocaleString()}</small></span>`).join('');
 }
 
+function escapeMarkup(value) {
+  return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+}
+
+function projectThumbnail() {
+  if (!generatedPattern) return '';
+  const thumbnail = document.createElement('canvas');
+  thumbnail.width = 320;
+  thumbnail.height = 200;
+  const context = thumbnail.getContext('2d');
+  context.fillStyle = '#f3f0f5';
+  context.fillRect(0, 0, thumbnail.width, thumbnail.height);
+  const scale = Math.min(thumbnail.width / generatedPattern.columns, thumbnail.height / generatedPattern.rows);
+  const width = generatedPattern.columns * scale;
+  const height = generatedPattern.rows * scale;
+  const offsetX = (thumbnail.width - width) / 2;
+  const offsetY = (thumbnail.height - height) / 2;
+  generatedPattern.cells.forEach((paletteIndex, index) => {
+    if (paletteIndex < 0) return;
+    const column = index % generatedPattern.columns;
+    const row = Math.floor(index / generatedPattern.columns);
+    context.fillStyle = `rgb(${generatedPattern.palette[paletteIndex].join(',')})`;
+    context.fillRect(offsetX + column * scale, offsetY + row * scale, Math.max(1, scale + .2), Math.max(1, scale + .2));
+  });
+  return thumbnail.toDataURL('image/jpeg', .82);
+}
+
+function captureProjectSettings() {
+  const selectors = ['targetWidth', 'targetHeight', 'drillProfile', 'roundingMode', 'maxColors', 'cleanupStrength', 'artworkSampling', 'artworkColorCleanup', 'backgroundTreatment', 'backgroundTolerance', 'backgroundShadeCount', 'backgroundShadeSource', 'backgroundDarkColor', 'backgroundLightColor', 'solidBackgroundColor', 'solidBackgroundStyle', 'backgroundColor', 'opacityThreshold', 'printWidth', 'printHeight', 'exportDpi', 'printCellDisplay', 'cropZoom', 'cropX', 'cropY'];
+  return {
+    ...Object.fromEntries(selectors.map(id => [id, document.querySelector(`#${id}`).value])),
+    transparencyMode: document.querySelector('input[name="transparencyMode"]:checked')?.value || 'fill',
+    vendors: [...document.querySelectorAll('.vendor-choice:checked')].map(choice => choice.value),
+    lockRatio: document.querySelector('#lockRatio').checked,
+  };
+}
+
+async function saveCurrentProject(stage = currentProjectStage) {
+  if (!generatedPattern) return;
+  currentProjectId ||= newProjectId();
+  currentProjectStage = stage;
+  const status = document.querySelector('#projectSaveStatus');
+  if (status) status.textContent = 'Saving…';
+  try {
+    const existing = await PatternProjects.get(currentProjectId).catch(() => null);
+    await PatternProjects.save({
+      id: currentProjectId,
+      name: currentProjectName || sourceAsset?.fileName?.replace(/\.[^.]+$/, '') || 'Untitled pattern',
+      createdAt: existing?.createdAt,
+      updatedAt: new Date().toISOString(),
+      stage,
+      thumbnail: projectThumbnail(),
+      sourceDataUrl: currentSourceDataUrl,
+      sourceAsset: sourceAsset ? { ...sourceAsset, previewUrl: '' } : null,
+      imageAnalysis,
+      backgroundSelection,
+      settings: captureProjectSettings(),
+      pattern: generatedPattern,
+    });
+    if (status) status.textContent = `Saved locally at ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  } catch (error) {
+    if (status) status.textContent = `Save failed: ${error.message}`;
+  }
+}
+
+function scheduleProjectSave(stage = currentProjectStage) {
+  currentProjectStage = stage;
+  clearTimeout(projectSaveTimer);
+  const status = document.querySelector('#projectSaveStatus');
+  if (status) status.textContent = 'Unsaved changes';
+  projectSaveTimer = setTimeout(() => saveCurrentProject(stage), 500);
+}
+
 function renderEditorPalette() {
   if (!generatedPattern) return;
   const palette = document.querySelector('#editorPalette');
-  palette.innerHTML = generatedPattern.dmcAssignments.map((color, index) => `<button type="button" role="option" aria-selected="${index === editorPaletteIndex}" class="${index === editorPaletteIndex ? 'selected' : ''}" data-palette-index="${index}"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><span><b>DMC ${color.code}</b><small>${color.name} · ${generatedPattern.counts[index].toLocaleString()}</small></span></button>`).join('');
+  palette.innerHTML = generatedPattern.dmcAssignments.map((color, index) => {
+    const material = generatedPattern.materials[index];
+    const specialty = material.type === 'standard' ? '' : `<em>${escapeMarkup(material.label || material.type)}</em>`;
+    return `<button type="button" role="option" aria-selected="${index === editorPaletteIndex}" class="${index === editorPaletteIndex ? 'selected' : ''}" data-palette-index="${index}"><i style="--swatch:rgb(${color.rgb.join(',')})"></i><span><b>${escapeMarkup(generatedPattern.symbols[index])} · DMC ${color.code}</b><small>${color.name} · ${generatedPattern.counts[index].toLocaleString()}</small>${specialty}</span></button>`;
+  }).join('');
   palette.querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
     editorPaletteIndex = Number(button.dataset.paletteIndex);
     editorTool = 'paint';
     document.querySelectorAll('.editor-tool').forEach(tool => tool.classList.toggle('active', tool.dataset.tool === 'paint'));
     renderEditorPalette();
+    updateMaterialEditor();
   }));
+}
+
+function updateMaterialEditor() {
+  if (!generatedPattern) return;
+  const color = generatedPattern.dmcAssignments[editorPaletteIndex];
+  const material = generatedPattern.materials[editorPaletteIndex];
+  document.querySelector('#materialColorName').textContent = `DMC ${color.code} · ${color.name}`;
+  document.querySelector('#editorSymbol').value = generatedPattern.symbols[editorPaletteIndex];
+  document.querySelector('#editorMaterialType').value = material.type;
+  document.querySelector('#editorMaterialLabel').value = material.label;
+  document.querySelector('#specialtyLabelField').hidden = material.type === 'standard';
+  document.querySelector('#editorSymbolError').hidden = true;
 }
 
 function renderEditor() {
@@ -743,6 +946,13 @@ function renderEditor() {
   drawGridCoordinates(context, { columns, rows, cellWidth: cellSize, cellHeight: cellSize, offsetX: gutter, offsetY: gutter, fontSize: 9, columnPrefix: 'C', rowPrefix: 'R', showTicks: true });
 }
 
+function resetEditorHistory() {
+  editorUndoStack = [];
+  editorRedoStack = [];
+  activeEditTransaction = null;
+  updateEditorHistoryButtons();
+}
+
 function updateEditorHistoryButtons() {
   document.querySelector('#undoEdit').disabled = editorUndoStack.length === 0;
   document.querySelector('#redoEdit').disabled = editorRedoStack.length === 0;
@@ -759,6 +969,7 @@ function finishEditTransaction() {
   renderEditorPalette();
   renderPattern();
   updateEditorHistoryButtons();
+  scheduleProjectSave('editing');
 }
 
 function editorCellFromPointer(event) {
@@ -795,6 +1006,7 @@ document.querySelector('#openEditor').addEventListener('click', () => {
   editorPaletteIndex = Math.max(0, generatedPattern.counts.indexOf(Math.max(...generatedPattern.counts)));
   refreshPatternCounts();
   renderEditorPalette();
+  updateMaterialEditor();
   renderEditor();
   updateEditorHistoryButtons();
   document.querySelector('#preflightPanel').hidden = true;
@@ -803,6 +1015,32 @@ document.querySelector('#openEditor').addEventListener('click', () => {
   panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 document.querySelector('#editorZoom').addEventListener('input', renderEditor);
+document.querySelector('#editorSymbol').addEventListener('change', event => {
+  const error = document.querySelector('#editorSymbolError');
+  try {
+    PatternSymbols.setSymbol(generatedPattern.symbols, editorPaletteIndex, event.target.value);
+    error.hidden = true;
+    renderEditorPalette();
+    renderEditor();
+    scheduleProjectSave('editing');
+  } catch (exception) {
+    error.textContent = exception.message;
+    error.hidden = false;
+    event.target.value = generatedPattern.symbols[editorPaletteIndex];
+  }
+});
+document.querySelector('#editorMaterialType').addEventListener('change', event => {
+  generatedPattern.materials[editorPaletteIndex].type = event.target.value;
+  if (event.target.value === 'standard') generatedPattern.materials[editorPaletteIndex].label = '';
+  updateMaterialEditor();
+  renderEditorPalette();
+  scheduleProjectSave('editing');
+});
+document.querySelector('#editorMaterialLabel').addEventListener('input', event => {
+  generatedPattern.materials[editorPaletteIndex].label = event.target.value.trim();
+  renderEditorPalette();
+  scheduleProjectSave('editing');
+});
 document.querySelectorAll('.editor-tool').forEach(button => button.addEventListener('click', () => {
   editorTool = button.dataset.tool;
   document.querySelectorAll('.editor-tool').forEach(tool => tool.classList.toggle('active', tool === button));
@@ -825,6 +1063,7 @@ document.querySelector('#undoEdit').addEventListener('click', () => {
   PatternEditor.applyTransaction(generatedPattern.cells, transaction, 'undo');
   editorRedoStack.push(transaction);
   refreshPatternCounts(); renderEditorPalette(); renderEditor(); renderPattern(); updateEditorHistoryButtons();
+  scheduleProjectSave('editing');
 });
 document.querySelector('#redoEdit').addEventListener('click', () => {
   const transaction = editorRedoStack.pop();
@@ -832,6 +1071,7 @@ document.querySelector('#redoEdit').addEventListener('click', () => {
   PatternEditor.applyTransaction(generatedPattern.cells, transaction, 'redo');
   editorUndoStack.push(transaction);
   refreshPatternCounts(); renderEditorPalette(); renderEditor(); renderPattern(); updateEditorHistoryButtons();
+  scheduleProjectSave('editing');
 });
 
 document.querySelector('#previewZoom').addEventListener('input', renderPattern);
@@ -901,13 +1141,16 @@ document.querySelector('#continuePreflight').addEventListener('click', () => {
   panel.hidden = false;
   updatePreflight();
   panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  scheduleProjectSave('preflight');
 });
-document.querySelectorAll('#printWidth, #printHeight, #exportDpi').forEach(control => control.addEventListener('input', updatePreflight));
+document.querySelectorAll('#printWidth, #printHeight, #exportDpi, #printCellDisplay').forEach(control => control.addEventListener('input', () => { updatePreflight(); scheduleProjectSave('preflight'); }));
+document.querySelector('#saveProject').addEventListener('click', () => saveCurrentProject(currentProjectStage));
 document.querySelector('#useRecommendedPrint').addEventListener('click', () => {
   const layout = generatedPattern.printLayout;
   document.querySelector('#printWidth').value = layout.recommendedWidthIn;
   document.querySelector('#printHeight').value = layout.recommendedHeightIn;
   updatePreflight();
+  scheduleProjectSave('preflight');
 });
 
 function crc32(bytes) {
@@ -949,7 +1192,7 @@ async function downloadCanvasWithDpi(canvas, dpi, fileName) {
 }
 
 function createLegendPages(dpi) {
-  const rows = PatternSymbols.legendRows(generatedPattern.dmcAssignments, generatedPattern.counts, generatedPattern.symbols);
+  const rows = PatternSymbols.legendRows(generatedPattern.dmcAssignments, generatedPattern.counts, generatedPattern.symbols, generatedPattern.materials);
   const legendLayout = PatternSymbols.legendPageLayout(dpi);
   const pageWidth = Math.round(8.5 * dpi);
   const pageHeight = Math.round(11 * dpi);
@@ -1046,10 +1289,12 @@ function createLegendPages(dpi) {
       context.textBaseline = 'alphabetic';
       context.fillStyle = '#29243d';
       context.font = `700 ${dpi * 7 / 72}px Arial, sans-serif`;
-      context.fillText(`DMC ${entry.code}`, x + swatchSize + dpi * .04, y + rowHeight * .31, columnWidth - swatchSize - dpi * .08);
+      const specialtyName = entry.material.type === 'standard' ? '' : (entry.material.label || entry.material.type);
+      context.fillText(specialtyName || `DMC ${entry.code}`, x + swatchSize + dpi * .04, y + rowHeight * .31, columnWidth - swatchSize - dpi * .08);
       context.fillStyle = '#70697a';
       context.font = `400 ${dpi * 5.5 / 72}px Arial, sans-serif`;
-      context.fillText(entry.name, x + swatchSize + dpi * .04, y + rowHeight * .57, columnWidth - swatchSize - dpi * .08);
+      const materialName = specialtyName ? `${entry.material.type} · DMC ${entry.code} ${entry.name}` : entry.name;
+      context.fillText(materialName, x + swatchSize + dpi * .04, y + rowHeight * .57, columnWidth - swatchSize - dpi * .08);
       const quantity = `${entry.count.toLocaleString()} drills`;
       context.fillText(quantity, x + swatchSize + dpi * .04, y + rowHeight * .82, columnWidth - swatchSize - dpi * .08);
     });
@@ -1135,6 +1380,4 @@ document.querySelector('#downloadLegend').addEventListener('click', async () => 
   }
 });
 
-document.querySelectorAll('.project-card').forEach(card => card.addEventListener('click', () => {
-  card.animate([{ transform: 'translateY(-3px)' }, { transform: 'translateY(-3px) scale(.99)' }, { transform: 'translateY(-3px)' }], { duration: 240 });
-}));
+renderSavedProjects();
