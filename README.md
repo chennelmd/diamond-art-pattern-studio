@@ -88,6 +88,12 @@ Choosing an option immediately updates the Width and Height fields. You can stil
 - Transparent-region modes for full-drill fill, empty partial-drill areas, or later selective editing
 - Fully local static assets and application behavior
 
+## Tests
+
+Run the server tests with `.venv/bin/python -m unittest discover -s tests -v` and the JavaScript tests with `node --test tests/*.test.js`.
+
+The project history browser regression requires the `playwright` Node package and its Chromium browser to be available. With the local server running, run `node tests/project-history.browser.cjs`. It uses an isolated browser context and checks undo/redo isolation when switching saved projects. Set `DIAMOND_TEST_URL` for a different server address or `CHROMIUM_PATH` for an existing Chromium executable.
+
 ## DMC color reference
 
 The MVP uses the standard 447-color DMC-numbered subset commonly used for diamond drills. Codes, names, and screen RGB approximations are derived from the numeric columns of the [CrossStitchCreator DMC reference table](https://github.com/adrianj/CrossStitchCreator/blob/master/CrossStitchCreator/Resources/DMC%20Cotton%20Floss%20converted%20to%20RGB%20Values.csv); discontinued floss-only shades are excluded. The software matches colors perceptually in CIELAB space.

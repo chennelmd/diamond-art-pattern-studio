@@ -474,6 +474,7 @@ async function renderSavedProjects() {
 async function restoreProject(id) {
   const project = await PatternProjects.get(id);
   if (!project) return;
+  resetEditorHistory();
   currentProjectId = project.id;
   currentProjectName = project.name;
   currentProjectStage = project.stage || 'editing';
@@ -534,8 +535,7 @@ document.querySelector('#generatePattern').addEventListener('click', async () =>
   if (!selectedImage) return;
   document.querySelector('#editorPanel').hidden = true;
   document.querySelector('#preflightPanel').hidden = true;
-  editorUndoStack = [];
-  editorRedoStack = [];
+  resetEditorHistory();
   const vendors = [...document.querySelectorAll('.vendor-choice:checked')].map(choice => choice.value);
   const vendorError = document.querySelector('#vendorError');
   vendorError.hidden = vendors.length > 0;
@@ -944,6 +944,13 @@ function renderEditor() {
   context.strokeStyle = '#766b80';
   context.strokeRect(gutter + .5, gutter + .5, columns * cellSize - 1, rows * cellSize - 1);
   drawGridCoordinates(context, { columns, rows, cellWidth: cellSize, cellHeight: cellSize, offsetX: gutter, offsetY: gutter, fontSize: 9, columnPrefix: 'C', rowPrefix: 'R', showTicks: true });
+}
+
+function resetEditorHistory() {
+  editorUndoStack = [];
+  editorRedoStack = [];
+  activeEditTransaction = null;
+  updateEditorHistoryButtons();
 }
 
 function updateEditorHistoryButtons() {
